@@ -74,19 +74,22 @@ Dentro do programa:
   <img width="609" height="817" alt="image" src="https://github.com/user-attachments/assets/b2a10b04-81ca-4f85-9ef9-18d9534281c1" />
 </p>
 
-
-| Opção | Funcionalidade | Descrição |
-|--------|----------------|------------|
-| 1 | Informações do arquivo | Metadados e estatísticas básicas |
-| 2 | Análise de IP's | IPs únicos e mais ativos |
-| 3 | Códigos de status HTTP | Distribuição de respostas HTTP |
-| 4 | URLs mais acessadas | Páginas mais visitadas |
-| 5 | Métodos por IP | Combinações IP/Método HTTP |
-| 6 | IPs suspeitos | IPs com +50 requisições |
-| 7 | Análise de User-Agents | Navegadores vs Bots |
-| 8 | Referências | Fontes de tráfego |
-| 9 | Padrões suspeitos | Tentativas de invasão |
-| 10 | Estatísticas avançadas | Métricas detalhadas |
+<div align="center">
+  
+  | Opção | Funcionalidade | Descrição |
+  |--------|----------------|------------|
+  | 1 | Informações do arquivo | Metadados e estatísticas básicas |
+  | 2 | Análise de IP's | IPs únicos e mais ativos |
+  | 3 | Códigos de status HTTP | Distribuição de respostas HTTP |
+  | 4 | URLs mais acessadas | Páginas mais visitadas |
+  | 5 | Métodos por IP | Combinações IP/Método HTTP |
+  | 6 | IPs suspeitos | IPs com +50 requisições |
+  | 7 | Análise de User-Agents | Navegadores vs Bots |
+  | 8 | Referências | Fontes de tráfego |
+  | 9 | Padrões suspeitos | Tentativas de invasão |
+  | 10 | Estatísticas avançadas | Métricas detalhadas |
+  
+</div>
 
 ---
 
