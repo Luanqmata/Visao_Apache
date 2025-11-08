@@ -8,6 +8,10 @@
 VERSION="0.7.2"
 LOG_FORMAT='^([0-9.]+) - - \[(.*?)\] "(.*?)" ([0-9]+) ([0-9]+) "(.*?)" "(.*?)"'
 
+ORANGE='\033[0;33m'
+LIGHT_BLUE='\033[1;34m'
+LIGHT_PURPLE='\033[1;35m'
+LIGHT_CYAN='\033[1;36m'
 GREEN='\033[1;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
@@ -194,8 +198,11 @@ exibir_menu() {
     echo "                23.  Mobile vs Desktop"
     echo "                24.  Informações /etc/passwd"
     echo "                25.  Investigar por Data"
-    echo "                26.  Exportar Relatório"
-    echo "                27.  Help / Sobre"
+    echo "                26.  Análise de Payloads"
+    echo "                27.  Análise de Redirecionamentos"
+    echo "                28.  Detecção de Port Scan"
+    echo "                29.  Exportar Relatório"
+    echo "                30.  Help / Sobre"
     echo "                0.   Sair"
     echo -e "${NC}"
     pula_linha 1
@@ -1232,6 +1239,224 @@ investigar_por_data() {
     read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
 }
 
+analise_payloads() {
+    clear
+    echo -e "${RED}"
+    pula_linha 1
+    echo "══════════════════════════ ANÁLISE DE PAYLOADS SUSPEITOS ═══════════════════════════"
+    pula_linha 1
+    
+    echo -e "${CYAN}🛡️ PAYLOADS SUSPEITOS EM URLs:${NC}"
+    pula_linha 1
+    
+    local payload_patterns=(
+        "union.*select" "sleep\(.*\)" "benchmark\(.*\)" 
+        "load_file" "into.*outfile" "into.*dumpfile"
+        "exec\(.*\)" "system\(.*\)" "passthru\(.*\)"
+        "shell_exec" "eval\(.*\)" "assert\(.*\)"
+        "base64_decode" "gzinflate" "str_rot13"
+        "document\.cookie" "alert\(.*\)" "script.*src"
+        "onmouseover" "onerror" "onload"
+    )
+    
+    local total_suspeitos=0
+    
+    for pattern in "${payload_patterns[@]}"; do
+        count=$(grep -i "$pattern" "$nome_arquivo" | wc -l)
+        if [[ $count -gt 0 ]]; then
+            total_suspeitos=$((total_suspeitos + count))
+            echo -e "${RED}🚨 '$pattern': $count ocorrências${NC}"
+            grep -i "$pattern" "$nome_arquivo" | awk '{print "   → IP: " $1 " | URL: " $7}' | head -2
+            pula_linha 1
+        fi
+    done
+    
+    if [[ $total_suspeitos -eq 0 ]]; then
+        echo -e "${GREEN}✅ Nenhum payload suspeito encontrado${NC}"
+    else
+        echo -e "${YELLOW}📊 Total de ocorrências suspeitas: $total_suspeitos${NC}"
+    fi
+    
+    pula_linha 1
+    
+    # Análise de parâmetros suspeitos
+    echo -e "${CYAN}🔍 PARÂMETROS SUSPEITOS EM URLs:${NC}"
+    pula_linha 1
+    
+    grep "?" "$nome_arquivo" | awk -F"?" '{print $2}' | \
+    awk -F"&" '{
+        for(i=1;i<=NF;i++) {
+            split($i, param, "=");
+            if(length(param[2]) > 100) {
+                print "Parâmetro muito longo: " param[1] " (" length(param[2]) " caracteres)"
+            }
+            if(param[2] ~ /[<>]/) {
+                print "Caracteres especiais: " param[1] " → " substr(param[2], 1, 50)
+            }
+        }
+    }' | sort | uniq -c | sort -nr | head -10
+    
+    pula_linha 1
+    echo "════════════════════════════════════════════════════════════════════════════════"
+    read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
+}
+
+analise_redirecionamentos() {
+    clear
+    echo -e "${RED}"
+    pula_linha 1
+    echo "══════════════════════════ ANÁLISE DE REDIRECIONAMENTOS ═══════════════════════════"
+    pula_linha 1
+    
+    echo -e "${CYAN}🔄 REDIRECIONAMENTOS 3xx SUSPEITOS:${NC}"
+    pula_linha 1
+    
+    local total_redirecionamentos=0
+    
+    # Redirecionamentos para domínios externos
+    awk '$9 ~ /^30[12378]/ {
+        print $1, $7, $10  # IP, URL, Location
+    }' "$nome_arquivo" | \
+    while read ip url location; do
+        if [[ "$location" != "-" && "$location" != "" ]]; then
+            if [[ "$location" =~ (http|https):// ]]; then
+                domain=$(echo "$location" | awk -F/ '{print $3}')
+                if [[ "$domain" != *"localhost"* && "$domain" != *"127.0.0.1"* ]]; then
+                    total_redirecionamentos=$((total_redirecionamentos + 1))
+                    echo -e "${YELLOW}🔗 IP: $ip${NC}"
+                    echo "   URL Origem: $url"
+                    echo "   Redireciona para: $location"
+                    
+                    # Verifica se é domínio suspeito
+                    if [[ "$domain" =~ (bit\.ly|tinyurl|goo\.gl|t\.co) ]]; then
+                        echo -e "${RED}   ⚠️  DOMÍNIO ENCURTADO SUSPEITO!${NC}"
+                    fi
+                    echo ""
+                fi
+            fi
+        fi
+    done | head -15
+    
+    if [[ $total_redirecionamentos -eq 0 ]]; then
+        echo -e "${GREEN}✅ Nenhum redirecionamento suspeito encontrado${NC}"
+    else
+        echo -e "${YELLOW}📊 Total de redirecionamentos externos: $total_redirecionamentos${NC}"
+    fi
+    
+    pula_linha 1
+    
+    # Estatísticas de códigos 3xx
+    echo -e "${CYAN}📈 ESTATÍSTICAS DE REDIRECIONAMENTOS:${NC}"
+    awk '$9 ~ /^30[12378]/ {print $9}' "$nome_arquivo" | sort | uniq -c | sort -nr | \
+    while read count code; do
+        case $code in
+            "301") desc="Movido Permanentemente" ;;
+            "302") desc="Encontrado" ;;
+            "303") desc="See Other" ;;
+            "307") desc="Redirecionamento Temporário" ;;
+            "308") desc="Redirecionamento Permanentemente" ;;
+            *) desc="Outro" ;;
+        esac
+        echo -e "   $count x Código $code ($desc)"
+    done
+    
+    pula_linha 1
+    echo "════════════════════════════════════════════════════════════════════════════════"
+    read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
+}
+
+detectar_port_scan() {
+    clear
+    echo -e "${RED}"
+    pula_linha 1
+    echo "══════════════════════════ DETECÇÃO DE PORT SCAN ═══════════════════════════"
+    pula_linha 1
+    
+    echo -e "${CYAN}🔎 POSSÍVEIS SCANS DE PORTA:${NC}"
+    pula_linha 1
+    
+    # IPs acessando múltiplas portas no mesmo servidor
+    local resultados=$(awk '{
+        split($7, parts, "/");
+        porta = parts[3];
+        if (porta != "" && porta ~ /^[0-9]+$/) {
+            print $1, porta
+        }
+    }' "$nome_arquivo" | sort | uniq | \
+    awk '{
+        count[$1]++;
+        ports[$1] = ports[$1] " " $2
+    }
+    END {
+        for (ip in count) {
+            if (count[ip] > 3) {  # Threshold reduzido para detectar mais casos
+                print count[ip] "|" ip "|" ports[ip]
+            }
+        }
+    }' | sort -t'|' -k1 -nr | head -15)
+    
+    if [[ -z "$resultados" ]]; then
+        echo -e "${GREEN}✅ Nenhum scan de porta detectado${NC}"
+    else
+        echo "$resultados" | while IFS='|' read count ip ports; do
+            if [[ $count -gt 10 ]]; then
+                echo -e "${RED}🚨 SCAN MASSIVO: IP $ip - $count portas diferentes${NC}"
+            elif [[ $count -gt 5 ]]; then
+                echo -e "${YELLOW}⚠️  SCAN MODERADO: IP $ip - $count portas diferentes${NC}"
+            else
+                echo -e "${CYAN}🔍 POSSÍVEL SCAN: IP $ip - $count portas diferentes${NC}"
+            fi
+            
+            # Mostra as portas (limitado a 10)
+            echo -n "   Portas:"
+            echo " $ports" | tr ' ' '\n' | sort -n | head -10 | tr '\n' ' '
+            echo ""
+            
+            # Métodos usados pelo IP suspeito
+            echo "   Métodos: $(awk -v ip="$ip" '$1 == ip {print $6}' "$nome_arquivo" | sed 's/"//g' | sort | uniq | tr '\n' ' ')"
+            echo ""
+        done
+    fi
+    
+    pula_linha 1
+    
+    # Portas mais escaneadas
+    echo -e "${CYAN}🎯 PORTAS MAIS ACESSADAS:${NC}"
+    awk '{
+        split($7, parts, "/");
+        porta = parts[3];
+        if (porta != "" && porta ~ /^[0-9]+$/) {
+            print porta
+        }
+    }' "$nome_arquivo" | sort | uniq -c | sort -nr | head -10 | \
+    while read count porta; do
+        case $porta in
+            "22") servico="SSH" ;;
+            "21") servico="FTP" ;;
+            "23") servico="Telnet" ;;
+            "25") servico="SMTP" ;;
+            "53") servico="DNS" ;;
+            "80") servico="HTTP" ;;
+            "110") servico="POP3" ;;
+            "143") servico="IMAP" ;;
+            "443") servico="HTTPS" ;;
+            "993") servico="IMAPS" ;;
+            "995") servico="POP3S" ;;
+            "3306") servico="MySQL" ;;
+            "3389") servico="RDP" ;;
+            "5432") servico="PostgreSQL" ;;
+            "6379") servico="Redis" ;;
+            "27017") servico="MongoDB" ;;
+            *) servico="Desconhecido" ;;
+        esac
+        echo "   $count acessos → Porta $porta ($servico)"
+    done
+    
+    pula_linha 1
+    echo "════════════════════════════════════════════════════════════════════════════════"
+    read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
+}
+
 help() {
     clear
     echo -e "${RED}"
@@ -1266,64 +1491,212 @@ exportar_relatorio() {
     local relatorio_dir="relatorio_$(date +%Y%m%d_%H%M%S)"
     mkdir -p "$relatorio_dir"
     
-    echo -e "${GREEN}Exportando análises para $relatorio_dir/...${NC}"
-    echo -e "${YELLOW}Isso pode levar alguns instantes...${NC}"
+    echo -e "${GREEN}Exportando análises CRÍTICAS para $relatorio_dir/...${NC}"
+    echo -e "${YELLOW}Gerando relatório executivo...${NC}"
     
+    # Relatório Executivo Focado
     {
-        echo "RELATÓRIO DE ANÁLISE - VISÃO APACHE"
-        echo "======================================"
+        echo "RELATÓRIO EXECUTIVO DE SEGURANÇA - VISÃO APACHE"
+        echo "================================================"
         echo "Arquivo analisado: $nome_arquivo"
         echo "Data da análise: $(date)"
-        echo "======================================"
+        echo "Total de linhas: $(wc -l < "$nome_arquivo")"
+        echo "Período: $(head -1 "$nome_arquivo" | awk '{print $4}' | sed 's/\[//') até $(tail -1 "$nome_arquivo" | awk '{print $4}' | sed 's/\[//')"
+        echo "================================================"
         echo ""
-    } > "$relatorio_dir/00_relatorio_completo.txt"
-    
-    contagem_linhas_arq >> "$relatorio_dir/00_relatorio_completo.txt" 2>&1
-    contagem_linhas_arq > "$relatorio_dir/01_info_arquivo.txt" 2>&1
-    
-    buscar_ips >> "$relatorio_dir/00_relatorio_completo.txt" 2>&1
-    buscar_ips > "$relatorio_dir/02_analise_ips.txt" 2>&1
-    
-    distribuicao_codigos_status >> "$relatorio_dir/00_relatorio_completo.txt" 2>&1
-    distribuicao_codigos_status > "$relatorio_dir/03_codigos_status.txt" 2>&1
-    
-    urls_mais_acessadas >> "$relatorio_dir/00_relatorio_completo.txt" 2>&1
-    urls_mais_acessadas > "$relatorio_dir/04_urls_acessadas.txt" 2>&1
-    
-    detectar_scanners >> "$relatorio_dir/00_relatorio_completo.txt" 2>&1
-    detectar_scanners > "$relatorio_dir/05_scanners.txt" 2>&1
-    
-    buscar_padroes_suspeitos >> "$relatorio_dir/00_relatorio_completo.txt" 2>&1
-    buscar_padroes_suspeitos > "$relatorio_dir/06_padroes_suspeitos.txt" 2>&1
-    
-    detectar_ddos >> "$relatorio_dir/00_relatorio_completo.txt" 2>&1
-    detectar_ddos > "$relatorio_dir/07_ddos.txt" 2>&1
-    
-    detectar_webshells >> "$relatorio_dir/00_relatorio_completo.txt" 2>&1
-    detectar_webshells > "$relatorio_dir/08_webshells.txt" 2>&1
-    
-    detectar_data_leakage >> "$relatorio_dir/00_relatorio_completo.txt" 2>&1
-    detectar_data_leakage > "$relatorio_dir/09_data_leakage.txt" 2>&1
-    
-    detectar_path_traversal >> "$relatorio_dir/00_relatorio_completo.txt" 2>&1
-    detectar_path_traversal > "$relatorio_dir/10_path_traversal.txt" 2>&1
-    
-    analise_performance >> "$relatorio_dir/00_relatorio_completo.txt" 2>&1
-    analise_performance > "$relatorio_dir/11_performance.txt" 2>&1
+        
+        echo "🚨 ALERTAS CRÍTICOS ENCONTRADOS:"
+        echo "================================="
+        
+        # 1. CREDENTIAL STUFFING DETECTADO
+        echo ""
+        echo "🔐 CREDENTIAL STUFFING:"
+        echo "----------------------"
+        local total_logins=$(awk 'tolower($7) ~ /(login|auth|signin|logar|autenticar|password|senha|credential|token|oauth|jwt|admin)/' "$nome_arquivo" | wc -l)
+        local ips_unicos_login=$(awk 'tolower($7) ~ /(login|auth|signin|logar|autenticar|password|senha|credential|token|oauth|jwt|admin)/ {print $1}' "$nome_arquivo" | sort -u | wc -l)
+        local media_tentativas=$((total_logins / (ips_unicos_login > 0 ? ips_unicos_login : 1)))
+        
+        if [[ $media_tentativas -gt 20 ]]; then
+            echo "❌ ALTO RISCO: Média de $media_tentativas tentativas/IP"
+            echo "📊 Total de tentativas de login: $total_logins"
+            echo "🌐 IPs únicos atacando: $ips_unicos_login"
+            
+            # IP mais agressivo
+            awk 'tolower($7) ~ /(login|auth|signin|logar|autenticar|password|senha|credential|token|oauth|jwt|admin)/ {print $1}' "$nome_arquivo" | \
+            sort | uniq -c | sort -nr | head -1 | while read count ip; do
+                echo "🔥 IP MAIS AGRESSIVO: $ip ($count tentativas)"
+            done
+        else
+            echo "✅ Comportamento normal de autenticação"
+        fi
+        
+        # 2. POSSÍVEL DDoS
+        echo ""
+        echo "🌪️  ANÁLISE DDoS:"
+        echo "----------------"
+        local ip_mais_requisicoes=$(awk '{print $1}' "$nome_arquivo" | sort | uniq -c | sort -nr | head -1)
+        local count_mais_requisicoes=$(echo "$ip_mais_requisicoes" | awk '{print $1}')
+        local ip_top=$(echo "$ip_mais_requisicoes" | awk '{print $2}')
+        
+        if [[ $count_mais_requisicoes -gt 1000 ]]; then
+            echo "❌ POSSÍVEL ATAQUE DDoS DETECTADO"
+            echo "🎯 IP SUSPEITO: $ip_top"
+            echo "💥 Requisições: $count_mais_requisicoes"
+            
+            # Horário de pico
+            awk -v ip="$ip_top" '$1 == ip {print $4}' "$nome_arquivo" | cut -d: -f2 | sort | uniq -c | sort -nr | head -1 | \
+            while read count hora; do
+                echo "⏰ Pico: $hora:00 ($count requisições)"
+            done
+        else
+            echo "✅ Sem indicadores de DDoS"
+        fi
+        
+        # 3. SCANNERS E INVASÕES
+        echo ""
+        echo "🔍 TENTATIVAS DE INVASÃO:"
+        echo "-------------------------"
+        local total_scanners=0
+        local scanners_patterns=("nmap" "nikto" "sqlmap" "metasploit" "nessus" "openvas" "burp" "wpscan" "joomscan")
+        
+        for scanner in "${scanners_patterns[@]}"; do
+            count=$(grep -i "$scanner" "$nome_arquivo" | wc -l)
+            total_scanners=$((total_scanners + count))
+        done
+        
+        local total_injection=$(grep -i -E "union.*select|sleep\(.*\)|benchmark\(.*\)|exec\(.*\)|system\(.*\)|eval\(.*\)" "$nome_arquivo" | wc -l)
+        local total_path_traversal=$(grep -i -E "\.\./|\.\.\\|%2e%2e" "$nome_arquivo" | wc -l)
+        
+        if [[ $total_scanners -gt 0 || $total_injection -gt 0 || $total_path_traversal -gt 0 ]]; then
+            echo "❌ TENTATIVAS DE EXPLORAÇÃO DETECTADAS:"
+            echo "🛡️  Scanners de vulnerabilidade: $total_scanners"
+            echo "💉 Injeção SQL/Comandos: $total_injection"
+            echo "📁 Path Traversal: $total_path_traversal"
+        else
+            echo "✅ Sem tentativas de exploração detectadas"
+        fi
+        
+        # 4. DATA LEAKAGE
+        echo ""
+        echo "🔓 RISCO DE VAZAMENTO:"
+        echo "---------------------"
+        local total_sensitive=$(grep -i -E "password|senha|credential|token|api_key|secret|private|credit.card|cpf|cnpj" "$nome_arquivo" | wc -l)
+        
+        if [[ $total_sensitive -gt 0 ]]; then
+            echo "⚠️  DADOS SENSÍVEIS ENCONTRADOS: $total_sensitive ocorrências"
+            echo "🔍 Investigar URLs com parâmetros sensíveis"
+        else
+            echo "✅ Sem dados sensíveis expostos"
+        fi
+        
+        # 5. WEB SHELLS
+        echo ""
+        echo "🦠 WEB SHELLS:"
+        echo "--------------"
+        local total_webshells=$(grep -i -E "cmd\.php|shell\.php|wso\.php|c99\.php|r57\.php|b374k\.php|backdoor|webadmin" "$nome_arquivo" | wc -l)
+        
+        if [[ $total_webshells -gt 0 ]]; then
+            echo "🚨 POSSÍVEIS WEB SHELLS: $total_webshells ocorrências"
+            grep -i -E "cmd\.php|shell\.php|wso\.php|c99\.php" "$nome_arquivo" | awk '{print "   → " $1 " - " $7}' | head -3
+        else
+            echo "✅ Sem indicadores de web shells"
+        fi
+        
+        # 6. RESUMO EXECUTIVO
+        echo ""
+        echo "📈 RESUMO EXECUTIVO:"
+        echo "===================="
+        local total_requisicoes=$(wc -l < "$nome_arquivo")
+        local ips_unicos=$(awk '{print $1}' "$nome_arquivo" | sort -u | wc -l)
+        local taxa_erro=$(awk '$9 ~ /^4|^5/ {count++} END {print count+0}' "$nome_arquivo")
+        local percent_erro=$((taxa_erro * 100 / total_requisicoes))
+        
+        echo "📊 Requisições totais: $total_requisicoes"
+        echo "🌐 IPs únicos: $ips_unicos"
+        echo "❌ Taxa de erro: $percent_erro%"
+        
+        # Score de risco
+        local risk_score=0
+        [[ $media_tentativas -gt 20 ]] && risk_score=$((risk_score + 3))
+        [[ $count_mais_requisicoes -gt 1000 ]] && risk_score=$((risk_score + 3))
+        [[ $total_scanners -gt 0 ]] && risk_score=$((risk_score + 2))
+        [[ $total_injection -gt 0 ]] && risk_score=$((risk_score + 2))
+        [[ $total_webshells -gt 0 ]] && risk_score=$((risk_score + 3))
+        
+        echo ""
+        echo "🎯 SCORE DE RISCO: $risk_score/13"
+        if [[ $risk_score -gt 8 ]]; then
+            echo "🚨 RISCO ELEVADO - AÇÃO IMEDIATA NECESSÁRIA"
+        elif [[ $risk_score -gt 4 ]]; then
+            echo "⚠️  RISCO MODERADO - MONITORAMENTO RECOMENDADO"
+        else
+            echo "✅ RISCO BAIXO - SITUAÇÃO NORMAL"
+        fi
+        
+        # 7. RECOMENDAÇÕES
+        echo ""
+        echo "💡 RECOMENDAÇÕES:"
+        echo "================="
+        if [[ $media_tentativas -gt 20 ]]; then
+            echo "• 🔥 Implementar rate limiting para autenticação"
+            echo "• 🤖 Adicionar CAPTCHA após múltiplas tentativas"
+            echo "• 📧 Configurar alertas para IPs suspeitos"
+        fi
+        
+        if [[ $count_mais_requisicoes -gt 1000 ]]; then
+            echo "• 🌐 Considerar WAF (Web Application Firewall)"
+            echo "• 🛡️  Implementar bloqueio temporário de IPs"
+            echo "• 📊 Monitorar padrões de tráfego anormais"
+        fi
+        
+        if [[ $total_scanners -gt 0 ]]; then
+            echo "• 🔍 Revisar regras de firewall"
+            echo "• 📝 Atualizar sistemas e aplicações"
+            echo "• 🧪 Realizar testes de penetração regulares"
+        fi
+        
+        if [[ $risk_score -lt 3 ]]; then
+            echo "• ✅ Manter monitoramento contínuo"
+            echo "• 📋 Revisar políticas de segurança"
+            echo "• 🎓 Treinar equipe em boas práticas"
+        fi
+        
+    } > "$relatorio_dir/00_relatorio_executivo.txt"
+
+    echo -e "${YELLOW}Gerando arquivos de suporte...${NC}"
     
     {
-        echo ""
-        echo "======================================"
-        echo "RELATÓRIO FINALIZADO"
-        echo "Arquivos gerados em: $relatorio_dir/"
-        echo "Total de análises: 12"
-        echo "======================================"
-    } >> "$relatorio_dir/00_relatorio_completo.txt"
+        echo "TOP 10 IPs MAIS PERIGOSOS:"
+        echo "==========================="
+        awk '{print $1}' "$nome_arquivo" | sort | uniq -c | sort -nr | head -10
+    } > "$relatorio_dir/01_ips_perigosos.txt"
     
-    echo -e "${GREEN}Relatório completo salvo em: $relatorio_dir/${NC}"
-    echo -e "${CYAN}Arquivo principal: 00_relatorio_completo.txt${NC}"
+    {
+        echo "URLs MAIS VULNERÁVEIS/ATACADAS:"
+        echo "================================"
+        awk '$9 ~ /^4|^5/ {print $7}' "$nome_arquivo" | sort | uniq -c | sort -nr | head -15
+    } > "$relatorio_dir/02_urls_vulneraveis.txt"
+    
+    {
+        echo "PADRÕES DE ATAQUE DETECTADOS:"
+        echo "=============================="
+        echo "SQL Injection/Command Injection:"
+        grep -i -E "union.*select|sleep\(.*\)|benchmark\(.*\)|exec\(.*\)|system\(.*\)|eval\(.*\)" "$nome_arquivo" | wc -l
+        echo ""
+        echo "Path Traversal:"
+        grep -i -E "\.\./|\.\.\\|%2e%2e" "$nome_arquivo" | wc -l
+        echo ""
+        echo "Web Shells:"
+        grep -i -E "cmd\.php|shell\.php|wso\.php|c99\.php|r57\.php" "$nome_arquivo" | wc -l
+    } > "$relatorio_dir/03_ataques_detectados.txt"
+    
+    echo -e "${GREEN}✅ Relatório executivo salvo em: $relatorio_dir/${NC}"
+    echo -e "${CYAN}📋 Arquivo principal: 00_relatorio_executivo.txt${NC}"
+    echo -e "${YELLOW}📊 Arquivos de suporte: 01-03_*.txt${NC}"
+    echo -e "${GREEN}🎯 Foco em: Alertas críticos, score de risco e recomendações acionáveis${NC}"
     sleep 3
 }
+
 main() {
     while true; do
         if [[ -z "$nome_arquivo" ]] || [[ ! -f "$nome_arquivo" ]]; then
@@ -1362,8 +1735,11 @@ main() {
             23) analise_mobile_desktop ;;
             24) buscar_passwd ;;
             25) investigar_por_data ;;
-            26) exportar_relatorio ;;
-            27) help ;;
+            26) analise_payloads ;;
+            27) analise_redirecionamentos ;;
+            28) detectar_port_scan ;;
+            29) exportar_relatorio ;;
+            30) help ;;
             0)
                 echo -e "${YELLOW}Saindo do programa...${NC}"
                 exit 0
