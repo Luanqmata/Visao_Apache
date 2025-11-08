@@ -258,12 +258,23 @@ tail -f access.log | ./visao_apache.sh
 
 # Vizualização do Menu
 
-![image](https://github.com/user-attachments/assets/6e0d8f80-51dd-4cdc-ac90-49f584553d14)
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/6e0d8f80-51dd-4cdc-ac90-49f584553d14" alt="Menu Principal" width="80%">
+</p>
 
-![image](https://github.com/user-attachments/assets/aaf0e560-1c3f-4857-b5dc-f44ea9d13ae0)
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/aaf0e560-1c3f-4857-b5dc-f44ea9d13ae0" alt="Detecção de Ameaças" width="80%">
+</p>
 
-![image](https://github.com/user-attachments/assets/edff9e7b-bfb6-4593-bdce-ccc1084c6d98)
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/edff9e7b-bfb6-4593-bdce-ccc1084c6d98" alt="Análises Avançadas" width="80%">
+</p>
 
-![image](https://github.com/user-attachments/assets/8bfd76fa-5763-4dbb-a34b-1e895440f377)
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/8bfd76fa-5763-4dbb-a34b-1e895440f377" alt="Exportação de Relatórios" width="80%">
+</p>
 
-![image](https://github.com/user-attachments/assets/f66647c0-9443-47d1-8403-828b7f737c87)
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/f66647c0-9443-47d1-8403-828b7f737c87" alt="Relatórios Detalhados" width="80%">
+</p>
+
