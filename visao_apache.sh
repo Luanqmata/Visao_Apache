@@ -5,41 +5,109 @@
 # Licenciado sob a GNU AGPL v3. Veja o arquivo LICENSE para mais detalhes.
 # Contato: https://www.linkedin.com/in/luan-bsc
 
+VERSION="0.7.2"
+LOG_FORMAT='^([0-9.]+) - - \[(.*?)\] "(.*?)" ([0-9]+) ([0-9]+) "(.*?)" "(.*?)"'
+
 GREEN='\033[1;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+PURPLE='\033[0;35m'
 NC='\033[0m'
 
 nome_arquivo=""
+temp_dir="/tmp/visao_apache"
+cache_file="$temp_dir/cache_$$.tmp"
+
+mkdir -p "$temp_dir"
+
+cleanup() {
+    rm -f "$cache_file"
+    exit 0
+}
+trap cleanup EXIT INT TERM
 
 pula_linha() {
-    num=$1
-    for ((i=1; i<=num; i++))
-    do
+    local num=$1
+    for ((i=1; i<=num; i++)); do
         echo ""
     done
 }
 
+log_message() {
+    local level=$1
+    local message=$2
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+
+    case $level in
+        "INFO") echo -e "${GREEN}[$timestamp] INFO: $message${NC}" ;;
+        "WARN") echo -e "${YELLOW}[$timestamp] WARN: $message${NC}" ;;
+        "ERROR") echo -e "${RED}[$timestamp] ERROR: $message${NC}" ;;
+    esac
+}
+
+validate_log_file() {
+    local file=$1
+    if [[ ! -f "$file" ]]; then
+        log_message "ERROR" "Arquivo $file não encontrado"
+        return 1
+    fi
+
+    if [[ ! -r "$file" ]]; then
+        log_message "ERROR" "Sem permissão de leitura para $file"
+        return 1
+    fi
+
+    if [[ ! -s "$file" ]]; then
+        log_message "ERROR" "Arquivo $file está vazio"
+        return 1
+    fi
+
+    if ! head -1 "$file" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'; then
+        log_message "WARN" "O arquivo pode não estar no formato de log Apache esperado"
+    fi
+
+    return 0
+}
+
+cache_data() {
+    local key=$1
+    local data=$2
+    echo "$data" > "${cache_file}_${key}"
+}
+
+get_cached_data() {
+    local key=$1
+    local cache_file="${cache_file}_${key}"
+    if [[ -f "$cache_file" && -s "$cache_file" ]]; then
+        cat "$cache_file"
+        return 0
+    fi
+    return 1
+}
+
+# Interface
 logo() {
-    pula_linha 3
-    echo -e "${YELLOW}                                   ?  Bem vindo !${NC}" 
+    clear
     pula_linha 2
+    echo -e "${YELLOW}                                   ?  Bem vindo !${NC}"
+    pula_linha 1
     echo -e "${YELLOW}                         ⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣠⣤⣤⣤⣤⣤⣤⣤⣤⣄⣀⡀⠀⠀⠀⠀⠀⠀⠀⠀${NC}"
     echo -e "${YELLOW}                         ⠀⠀⠀⠀⠀⢀⣤⣶⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣦⣄⠀⠀⠀⠀⠀⠀${NC}"
     echo -e "${YELLOW}                         ⠀⠀⠀⣠⣶⣿⣿⡿⣿⣿⣿⡿⠋⠉⠀⠀⠉⠙⢿⣿⣿⡿⣿⣿⣷⣦⡀⠀⠀⠀${NC}"
     echo -e "${YELLOW}                         ⠀⢀⣼⣿⣿⠟⠁⢠⣿⣿⠏⠀⠀⢠⣤⣤⡀⠀⠀⢻⣿⣿⡀⠙⢿⣿⣿⣦⠀⠀${NC}"
-    echo -e "${YELLOW}                         ⣰⣿⣿⡟⠁⠀⠀⢸⣿⣿⠀⠀⠀⢿⣿⣿⡟⠀⠀⠈⣿⣿⡇⠀⠀⠙⣿⣿⣷        ~ v0.3.5 ~ Alpha    ${NC}"
+    echo -e "${YELLOW}                         ⣰⣿⣿⡟⠁⠀⠀⢸⣿⣿⠀⠀⠀⢿⣿⣿⡟⠀⠀⠈⣿⣿⡇⠀⠀⠙⣿⣿⣷        ~ v${VERSION} ~ Alpha    ${NC}"
     echo -e "${YELLOW}                         ⠈⠻⣿⣿⣦⣄⠀⠸⣿⣿⣆⠀⠀⠀⠉⠉⠀⠀⠀⣸⣿⣿⠃⢀⣤⣾⣿⣿⠟⠁${NC}"
     echo -e "${YELLOW}                         ⠀⠀⠈⠻⣿⣿⣿⣶⣿⣿⣿⣦⣄⠀⠀⠀⢀⣠⣾⣿⣿⣿⣾⣿⣿⡿⠋⠁⠀⠀${NC}"
     echo -e "${YELLOW}                         ⠀⠀⠀⠀⠀⠙⠻⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠿⠛⠁⠀⠀⠀⠀⠀${NC}"
     echo -e "${YELLOW}                        ⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠛⠛⠿⠿⠿⠿⠿⠿⠿⠛⠋⠉⠀⠀⠀⠀⠀⠀${NC}"
-    pula_linha 2
+    pula_linha 1
     echo -e "${YELLOW}                         - = - = - = visão Apache 2 - = - = - =${NC}"
-    pula_linha 3
+    pula_linha 2
 }
 
 nome_app() {
-    pula_linha 3
     echo -e "${RED}    ▄   ▄█    ▄▄▄▄▄   ██   ████▄     ██   █ ▄▄  ██   ▄█▄     ▄  █ ▄███▄   ${NC}"
     echo -e "${RED}     █  ██   █     ▀▄ █ █  █   █     █ █  █   █ █ █  █▀ ▀▄  █   █ █▀   ▀  ${NC}"
     echo -e "${RED}█     █ ██ ▄  ▀▀▀▀▄   █▄▄█ █   █     █▄▄█ █▀▀▀  █▄▄█ █   ▀  ██▀▀█ ██▄▄    ${NC}"
@@ -47,220 +115,1124 @@ nome_app() {
     echo -e "${RED}  █  █   ▐               █              █  █       █ ▀███▀     █  ▀███▀   ${NC}"
     echo -e "${RED}   █▐                   █              █    ▀     █           ▀             ${NC}"
     echo -e "${RED}   ▐                   ▀              ▀          ▀                         ${NC}"
-    pula_linha 4
 }
 
 adicionar_arquivo() {
-    logo
-    echo -e "${GREEN}Obs: (deve estar no mesmo diretório que o script, com .log no final)${NC}"
-    pula_linha 1
-    read -p "Digite o nome do arquivo: " nome_arquivo
-    pula_linha 1
-    echo -e "${GREEN}Adicionando arquivo: $nome_arquivo${NC}"
-    pula_linha 1
+    while true; do
+        logo
+        echo -e "${GREEN}Selecione uma opção:${NC}"
+        echo "1. Usar arquivo no diretório atual"
+        echo "2. Especificar caminho completo"
+        echo "3. Voltar"
+        pula_linha 1
+        read -p "Opção: " opcao_arquivo
 
-    if [ -f "$nome_arquivo" ]; then
-        echo -e "${GREEN}Tipo de arquivo: ${NC}"
-        head -n 1 "$nome_arquivo"
-        pula_linha 1
-        sleep 2
-        echo -e "${GREEN}Arquivo adicionado com sucesso!!${NC}"
-        pula_linha 1
-        sleep 4
-        clear
-    else
-	echo -e "${RED}Analisando arquivo ...${NC}"
-	sleep 2
-	pula_linha 1
-        echo -e "${RED}Arquivo $nome_arquivo não encontrado. Lembre-se do (.log)${NC}"
-        exit 1
-    fi
+        case $opcao_arquivo in
+            1)
+                echo -e "${GREEN}Arquivos .log no diretório atual:${NC}"
+                ls -1 *.log 2>/dev/null || echo -e "${YELLOW}Nenhum arquivo .log encontrado${NC}"
+                pula_linha 1
+                read -p "Digite o nome do arquivo: " nome_arquivo
+                ;;
+            2)
+                read -p "Digite o caminho completo do arquivo: " nome_arquivo
+                ;;
+            3)
+                return 1
+                ;;
+            *)
+                echo -e "${RED}Opção inválida${NC}"
+                sleep 2
+                continue
+                ;;
+        esac
+
+        if validate_log_file "$nome_arquivo"; then
+            log_message "INFO" "Arquivo $nome_arquivo carregado com sucesso"
+            pula_linha 1
+            echo -e "${GREEN}Primeira linha do arquivo:${NC}"
+            head -n 1 "$nome_arquivo"
+            sleep 3
+            return 0
+        else
+            echo -e "${RED}Erro ao carregar arquivo. Tente novamente.${NC}"
+            sleep 3
+        fi
+    done
 }
 
 exibir_menu() {
+    clear
     nome_app
-    echo "Digite 1. Infos's do arquivo: ( "$nome_arquivo" )."
-    echo "Digite 2. Para obter Infomações de IP's."
-    echo "Digite 3. Para obter Distribuição dos cdg's status HTTP."
-    echo "Digite 4. Para obter as Url's Mais acessadas."
-    echo "Digite 5. Para ver os metodos usado por IP's."
-    echo "Digite 6. Para Imprimir ip's Suspeitos (+50 req)."
-    echo "Digite 7. Para vizualizar o trafego (Dispositivo/Navegador/SO)."
-    echo "Digite 8. Para Verificar Referencias."
-    echo "Digite 9. Para buscar o /etc/passwd."
-    echo "Digite 0. Para Sair."
     pula_linha 2
-    read -p "Escolha uma opção: " escolha
-
+    echo -e "${CYAN}ARQUIVO ATUAL: ${YELLOW}$nome_arquivo${NC}"
+    pula_linha 1
+    echo -e "${GREEN}Menu Principal:${NC}"
+    echo -e "${RED}"
+    echo "                1.   Informações do arquivo"
+    echo "                2.   Análise de IP's"
+    echo "                3.   Códigos de status HTTP"
+    echo "                4.   URLs mais acessadas"
+    echo "                5.   Métodos por IP"
+    echo "                6.   IPs suspeitos (+50 requisições)"
+    echo "                7.   Análise de User-Agents"
+    echo "                8.   Referências"
+    echo "                9.   Buscar padrões suspeitos"
+    echo "                10.  Estatísticas avançadas"
+    echo "                11.  Detecção de Scanners"
+    echo "                12.  Análise Geográfica"
+    echo "                13.  Detecção DDoS"
+    echo "                14.  Crawlers Legítimos"
+    echo "                15.  Path Traversal"
+    echo "                16.  Análise de Sessões"
+    echo "                17.  Detecção Data Leakage"
+    echo "                18.  Análise Performance"
+    echo "                19.  Detecção Web Shells"
+    echo "                20.  Fingerprinting"
+    echo "                21.  Análise API"
+    echo "                22.  Credential Stuffing"
+    echo "                23.  Mobile vs Desktop"
+    echo "                24.  Informações /etc/passwd"
+    echo "                25.  Investigar por Data"
+    echo "                26.  Exportar Relatório"
+    echo "                27.  Help / Sobre"
+    echo "                0.   Sair"
+    echo -e "${NC}"
+    pula_linha 1
 }
 
 contagem_linhas_arq() {
+    clear
+    local cache_key="file_info"
+
+    if get_cached_data "$cache_key"; then
+        return
+    fi
+
     echo -e "${RED}"
     pula_linha 1
-
-    num_linhas=$(wc -l < "$nome_arquivo")
-
-    echo "O arquivo '$nome_arquivo' tem $num_linhas linhas."
+    echo "════════════════════════════ INFORMAÇÕES DO ARQUIVO ════════════════════════════"
     pula_linha 1
-    echo "Tamanho do arquivo: $(du -h "$nome_arquivo" | cut -f1)"
+
+    local num_linhas=$(wc -l < "$nome_arquivo")
+    local tamanho=$(du -h "$nome_arquivo" | cut -f1)
+    local primeira_data=$(head -1 "$nome_arquivo" | awk '{print $4}' | cut -d'[' -f2)
+    local ultima_data=$(tail -1 "$nome_arquivo" | awk '{print $4}' | cut -d'[' -f2)
+
+    echo -e "Linhas: ${YELLOW}$num_linhas${NC}"
+    echo -e "Tamanho: ${YELLOW}$tamanho${NC}"
+    echo -e "Período: ${YELLOW}$primeira_data${NC} até ${YELLOW}$ultima_data${NC}"
+
     pula_linha 1
-    awk '{sum += $10; count++} END {print "Média de tempo de resposta:", sum/count}' "$nome_arquivo"
+    echo -e "${CYAN}Estatísticas:${NC}"
+    awk '
+    {
+        sum += $10;
+        count++;
+        if ($10 > max) max = $10;
+        if (NR==1) min = $10;
+        if ($10 < min) min = $10;
+    }
+    END {
+        if (count > 0) {
+            print "Tempo de resposta - Média: " sum/count "s"
+            print "Tempo de resposta - Máximo: " max "s"
+            print "Tempo de resposta - Mínimo: " min "s"
+        }
+    }' "$nome_arquivo"
+
+    pula_linha 1
+    echo -e "${CYAN}Top 5 métodos HTTP:${NC}"
+    awk '{print $6}' "$nome_arquivo" | sed 's/"//g' | sort | uniq -c | sort -nr | head -5
+
+    cache_data "$cache_key" "done"
+
+    pula_linha 1
+    echo "════════════════════════════════════════════════════════════════════════════════"
     pula_linha 1
     read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
-    clear
 }
 
 buscar_ips() {
+    clear
     echo -e "${RED}"
     pula_linha 1
-    echo "- - - - - - - - - - - IP's - - - - - - - - - - "
+    echo "══════════════════════════════ ANÁLISE DE IP's ═══════════════════════════════"
     pula_linha 1
 
-    cat "$nome_arquivo" | cut -d " " -f1 | sort -u
-    pula_linha 1
-    echo "- - - - - - - - - - Requisições de cada IP - - - - - - - - - - - - "
-    pula_linha 1
-    cat "$nome_arquivo" | cut -d " " -f1 | sort | uniq -c | sort -nr
-    pula_linha 1
-    echo "- - - - - - - - - - - Requisições por hora - - - - - - - - - - - -"
-    pula_linha 1
-    awk '{print $4}' "$nome_arquivo" | cut -d: -f2 | sort | uniq -c | sort -nr
-    pula_linha 1
+    echo -e "${CYAN}IP's únicos encontrados:${NC}"
+    awk '{print $1}' "$nome_arquivo" | sort -u | head -20
 
+    pula_linha 1
+    echo -e "${CYAN}Top 20 IP's por requisições:${NC}"
+    awk '{print $1}' "$nome_arquivo" | sort | uniq -c | sort -nr | head -20
+
+    pula_linha 1
+    echo -e "${CYAN}Requisições por hora (Top 20):${NC}"
+    awk '{print $4}' "$nome_arquivo" | cut -d: -f2 | sort | uniq -c | sort -nr | head -20
+
+    pula_linha 1
+    echo "════════════════════════════════════════════════════════════════════════════════"
     pula_linha 1
     read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
-    clear
 }
 
 distribuicao_codigos_status() {
+    clear
     echo -e "${RED}"
     pula_linha 1
-    echo "Distribuição dos códigos de status HTTP:"
+    echo "══════════════════════════ CÓDIGOS DE STATUS HTTP ═══════════════════════════"
     pula_linha 1
 
-    awk '{print $9}' "$nome_arquivo" | sort | uniq -c | sort -nr
+    echo -e "${CYAN}Distribuição detalhada:${NC}"
+    awk '{print $9}' "$nome_arquivo" | sort | uniq -c | sort -nr | while read count code; do
+        case $code in
+            2*) color=$GREEN ;;
+            3*) color=$YELLOW ;;
+            4*) color=$RED ;;
+            5*) color=$RED ;;
+            *) color=$NC ;;
+        esac
+        echo -e "${color}$count x Código $code${NC}"
+    done
 
+    pula_linha 1
+    echo "════════════════════════════════════════════════════════════════════════════════"
     pula_linha 1
     read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
-    clear
 }
 
 urls_mais_acessadas() {
+    clear
     echo -e "${RED}"
     pula_linha 1
-    echo "URLs mais acessadas:"
+    echo "═══════════════════════════ URLS MAIS ACESSADAS ═════════════════════════════"
     pula_linha 1
 
-    awk '{print $7}' "$nome_arquivo" | sort | uniq -c | sort -n
+    echo -e "${CYAN}Top 20 URLs:${NC}"
+    awk '{print $7}' "$nome_arquivo" | sort | uniq -c | sort -nr | head -20
 
+    pula_linha 1
+    echo "════════════════════════════════════════════════════════════════════════════════"
     pula_linha 1
     read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
-    clear
 }
 
 metodos_por_ip() {
+    clear
     echo -e "${RED}"
     pula_linha 1
-    echo "Métodos utilizados por endereços IP:"
+    echo "══════════════════════════ MÉTODOS POR IP ═══════════════════════════════════"
     pula_linha 1
 
-    awk '{print $1, $6}' "$nome_arquivo" | sort | uniq -c | sort -nr
+    echo -e "${CYAN}Top 20 combinações IP/Método:${NC}"
+    awk '{print $1, $6}' "$nome_arquivo" | sed 's/"//g' | sort | uniq -c | sort -nr | head -20
 
+    pula_linha 1
+    echo "════════════════════════════════════════════════════════════════════════════════"
     pula_linha 1
     read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
-    clear
 }
 
 ips_suspeitos() {
+    clear
+    local threshold=${1:-50}
+
     echo -e "${RED}"
     pula_linha 1
-    echo "IPs com muitas requisições:"
+    echo "═══════════════════════════ IP's SUSPEITOS (+$threshold req) ═══════════════════════════"
     pula_linha 1
 
-    awk '{print $1}' "$nome_arquivo" | sort | uniq -c | sort -nr | awk '$1 > 50'
+    echo -e "${RED}IPs com mais de $threshold requisições:${NC}"
+    awk '{print $1}' "$nome_arquivo" | sort | uniq -c | sort -nr | awk -v threshold=$threshold '$1 > threshold'
 
+    pula_linha 1
+    echo -e "${YELLOW}Total de IPs analisados:${NC}"
+    awk '{print $1}' "$nome_arquivo" | sort -u | wc -l
+
+    pula_linha 1
+    echo "════════════════════════════════════════════════════════════════════════════════"
     pula_linha 1
     read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
-    clear
 }
 
 vizualizador_trafego() {
+    clear
     echo -e "${RED}"
     pula_linha 1
-    echo "Visualizador de Tráfego: Distribuição de User-Agents"
+    echo "══════════════════════════ ANÁLISE DE USER-AGENTS ═══════════════════════════"
     pula_linha 1
 
-    awk -F\" '{print $6}' "$nome_arquivo" | sort | uniq -c | sort -nr
+    echo -e "${CYAN}Top 20 User-Agents:${NC}"
+    awk -F\" '{print $6}' "$nome_arquivo" | sort | uniq -c | sort -nr | head -20
 
+    pula_linha 1
+    echo -e "${CYAN}Distribuição por tipo:${NC}"
+    echo -e "${GREEN}Navegadores:${NC}"
+    awk -F\" '{print $6}' "$nome_arquivo" | grep -i -E "chrome|firefox|safari|edge" | wc -l
+    echo -e "${YELLOW}Bots/Crawlers:${NC}"
+    awk -F\" '{print $6}' "$nome_arquivo" | grep -i -E "bot|crawler|spider" | wc -l
+    echo -e "${RED}Outros:${NC}"
+    awk -F\" '{print $6}' "$nome_arquivo" | grep -v -i -E "chrome|firefox|safari|edge|bot|crawler|spider" | wc -l
+
+    pula_linha 1
+    echo "════════════════════════════════════════════════════════════════════════════════"
     pula_linha 1
     read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
-    clear
 }
 
 verificar_referers() {
+    clear
     echo -e "${RED}"
     pula_linha 1
-    echo " Verificar Referências "
+    echo "══════════════════════════════ REFERÊNCIAS ═══════════════════════════════════"
     pula_linha 1
 
-    awk -F\" '{print $4}' "$nome_arquivo" | sort | uniq -c | sort -nr
+    echo -e "${CYAN}Top 20 referências:${NC}"
+    awk -F\" '{print $4}' "$nome_arquivo" | sort | uniq -c | sort -nr | head -20
+
+    pula_linha 1
+    echo -e "${CYAN}Requisições sem referência:${NC}"
+    awk -F\" '$4 == "-"' "$nome_arquivo" | wc -l
+
+    pula_linha 1
+    echo "════════════════════════════════════════════════════════════════════════════════"
     pula_linha 1
     read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
+}
+
+buscar_padroes_suspeitos() {
     clear
+    echo -e "${RED}"
+    pula_linha 1
+    echo "══════════════════════════ PADRÕES SUSPEITOS ════════════════════════════════"
+    pula_linha 1
+
+    echo -e "${RED}Possíveis tentativas de invasão:${NC}"
+
+    local patterns=(
+        "etc/passwd"
+        "bin/sh"
+        "cmd.exe"
+        "union.select"
+        "script.php"
+        "web.config"
+        "admin.php"
+        "wp-admin"
+        "eval("
+        "base64_decode"
+    )
+
+    for pattern in "${patterns[@]}"; do
+        count=$(grep -i "$pattern" "$nome_arquivo" | wc -l)
+        if [[ $count -gt 0 ]]; then
+            echo -e "${RED}Padrão '$pattern': $count ocorrências${NC}"
+        fi
+    done
+
+    pula_linha 1
+    echo -e "${YELLOW}Requisições com user-agents suspeitos:${NC}"
+    awk -F\" '{print $6}' "$nome_arquivo" | grep -i -E "nikto|sqlmap|nmap|metasploit" | uniq -c
+
+    pula_linha 1
+    echo "════════════════════════════════════════════════════════════════════════════════"
+    pula_linha 1
+    read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
+}
+
+estatisticas_avancadas() {
+    clear
+    echo -e "${RED}"
+    pula_linha 1
+    echo "══════════════════════════ ESTATÍSTICAS AVANÇADAS ═══════════════════════════"
+    pula_linha 1
+
+    echo -e "${CYAN}Tráfego por dia:${NC}"
+    awk '{print $4}' "$nome_arquivo" | cut -d: -f1 | cut -d[ -f2 | sort | uniq -c
+
+    pula_linha 1
+    echo -e "${CYAN}Top 10 páginas com erro 404:${NC}"
+    awk '$9 == "404" {print $7}' "$nome_arquivo" | sort | uniq -c | sort -nr | head -10
+
+    pula_linha 1
+    echo -e "${CYAN}Top 10 páginas com erro 500:${NC}"
+    awk '$9 == "500" {print $7}' "$nome_arquivo" | sort | uniq -c | sort -nr | head -10
+
+    pula_linha 1
+    echo -e "${CYAN}Distribuição por tamanho de resposta:${NC}"
+    awk '
+    {
+        size = $10;
+        if (size < 1024) small++;
+        else if (size < 10240) medium++;
+        else if (size < 1048576) large++;
+        else huge++;
+    }
+    END {
+        total = small + medium + large + huge;
+        if (total > 0) {
+            print "Pequenas (<1KB): " small " (" small/total*100 "%)"
+            print "Médias (<10KB): " medium " (" medium/total*100 "%)"
+            print "Grandes (<1MB): " large " (" large/total*100 "%)"
+            print "Enormes (>=1MB): " huge " (" huge/total*100 "%)"
+        }
+    }' "$nome_arquivo"
+
+    pula_linha 1
+    echo "════════════════════════════════════════════════════════════════════════════════"
+    pula_linha 1
+    read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
+}
+
+detectar_scanners() {
+    clear
+    echo -e "${RED}"
+    pula_linha 1
+    echo "══════════════════════════ DETECÇÃO DE SCANNERS ═══════════════════════════"
+    pula_linha 1
+    
+    echo -e "${RED}Scanners de Vulnerabilidades:${NC}"
+    local scanners=("nmap" "nikto" "sqlmap" "metasploit" "nessus" "openvas" "burp" "wpscan" "joomscan")
+    
+    for scanner in "${scanners[@]}"; do
+        count=$(grep -i "$scanner" "$nome_arquivo" | wc -l)
+        if [[ $count -gt 0 ]]; then
+            echo -e "${RED}🔍 $scanner: $count requisições${NC}"
+            grep -i "$scanner" "$nome_arquivo" | awk '{print $1}' | sort -u | head -3 | while read ip; do
+                echo "   IP: $ip"
+            done
+        fi
+    done
+    
+    pula_linha 1
+    echo -e "${YELLOW}Padrões de Scanner Comuns:${NC}"
+    grep -E "(admin|login|wp-admin|phpmyadmin|\.bak|\.old|\.txt)" "$nome_arquivo" | awk '{print $1, $7}' | sort -u | head -10
+    
+    pula_linha 1
+    echo "════════════════════════════════════════════════════════════════════════════════"
+    pula_linha 1
+    read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
+}
+
+analise_geografica() {
+    clear
+    echo -e "${RED}"
+    pula_linha 1
+    echo "══════════════════════════ ANÁLISE GEOGRÁFICA ═══════════════════════════"
+    pula_linha 1
+    
+    echo -e "${CYAN}Top IPs por país (usando whois):${NC}"
+    
+    awk '{print $1}' "$nome_arquivo" | sort | uniq -c | sort -nr | head -5 | while read count ip; do
+        country=$(whois "$ip" 2>/dev/null | grep -i country | head -1 | awk '{print $2}' | tr -d '\r')
+        if [[ -z "$country" ]]; then
+            country="Desconhecido"
+        fi
+        echo -e "IP: $ip - Requisições: $count - País: $country"
+    done
+    
+    pula_linha 1
+    echo "════════════════════════════════════════════════════════════════════════════════"
+    pula_linha 1
+    read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
+}
+
+detectar_ddos() {
+    clear
+    echo -e "${RED}"
+    pula_linha 1
+    echo "══════════════════════════ DETECÇÃO DE DDoS ═══════════════════════════"
+    pula_linha 1
+    
+    local threshold=100
+    local ip_threshold=1000
+    
+    echo -e "${RED}Possíveis ataques DDoS (IPs com +$threshold req/min):${NC}"
+    
+    awk '{
+        split($4, dt, ":"); 
+        minuto = dt[1] ":" dt[2];
+        print minuto, $1
+    }' "$nome_arquivo" | sed 's/\[//g' | sort | uniq -c | \
+    awk -v threshold=$threshold '$1 > threshold {print "Minuto: "$2", Requisições: "$1", IP: "$3}' | head -10
+    
+    pula_linha 1
+    
+    echo -e "${YELLOW}IPs com mais de $ip_threshold requisições (TOP 10):${NC}"
+    awk '{print $1}' "$nome_arquivo" | sort | uniq -c | sort -nr | head -10 | \
+    while read count ip; do
+        if [[ $count -gt 5000 ]]; then
+            echo -e "${RED}🚨 MASSIVO: $ip - $count requisições${NC}"
+        elif [[ $count -gt 1000 ]]; then
+            echo -e "${YELLOW}⚠️  ALTO: $ip - $count requisições${NC}"
+        else
+            echo -e "${GREEN}✅ NORMAL: $ip - $count requisições${NC}"
+        fi
+    done
+    
+    pula_linha 1
+    
+    echo -e "${RED}🔍 INVESTIGANDO IP MAIS SUSPEITO:${NC}"
+    ip_suspeito=$(awk '{print $1}' "$nome_arquivo" | sort | uniq -c | sort -nr | head -1 | awk '{print $2}')
+    count_suspeito=$(awk '{print $1}' "$nome_arquivo" | sort | uniq -c | sort -nr | head -1 | awk '{print $1}')
+    
+    if [[ -n "$ip_suspeito" && $count_suspeito -gt 1000 ]]; then
+        echo -e "${RED}🚨 IP $ip_suspeito - $count_suspeito requisições (POSSÍVEL ATAQUE)${NC}"
+        
+        echo -e "${CYAN}Comportamento do IP $ip_suspeito:${NC}"
+        
+        echo -e "${YELLOW}Horários de pico:${NC}"
+        awk -v ip="$ip_suspeito" '$1 == ip {print $4}' "$nome_arquivo" | cut -d: -f2 | sort | uniq -c | sort -nr | head -5
+        
+        echo -e "${YELLOW}URLs mais acessadas:${NC}"
+        awk -v ip="$ip_suspeito" '$1 == ip {print $7}' "$nome_arquivo" | sort | uniq -c | sort -nr | head -5
+        
+        echo -e "${YELLOW}Métodos HTTP:${NC}"
+        awk -v ip="$ip_suspeito" '$1 == ip {print $6}' "$nome_arquivo" | sed 's/"//g' | sort | uniq -c | sort -nr
+        
+        echo -e "${YELLOW}Códigos de status:${NC}"
+        awk -v ip="$ip_suspeito" '$1 == ip {print $9}' "$nome_arquivo" | sort | uniq -c | sort -nr
+        
+    else
+        echo "Nenhum IP com comportamento suspeito detectado"
+    fi
+    
+    pula_linha 1
+    
+    echo -e "${CYAN}📊 ANÁLISE DE PICOS HORÁRIOS:${NC}"
+    awk '{print $4}' "$nome_arquivo" | cut -d: -f2 | sort | uniq -c | sort -nr | head -5 | \
+    while read count hora; do
+        if [[ $count -gt 1000 ]]; then
+            echo -e "${RED}🚨 PICO: $hora h - $count requisições${NC}"
+        else
+            echo "Hora $hora: $count requisições"
+        fi
+    done
+    
+    pula_linha 1
+    echo "════════════════════════════════════════════════════════════════════════════════"
+    pula_linha 1
+    echo -e "${NC}"
+    read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
+}
+
+analise_crawlers() {
+    clear
+    echo -e "${RED}"
+    pula_linha 1
+    echo "══════════════════════════ CRAWLERS LEGÍTIMOS ═══════════════════════════"
+    pula_linha 1
+    
+    local crawlers=(
+        "googlebot" "bingbot" "yahoo" "duckduckbot" "baiduspider"
+        "yandexbot" "facebookexternalhit" "twitterbot" "linkedinbot"
+    )
+    
+    for crawler in "${crawlers[@]}"; do
+        count=$(grep -i "$crawler" "$nome_arquivo" | wc -l)
+        if [[ $count -gt 0 ]]; then
+            echo -e "${GREEN}🤖 $crawler: $count requisições${NC}"
+        fi
+    done
+    
+    pula_linha 1
+    echo "════════════════════════════════════════════════════════════════════════════════"
+    pula_linha 1
+    read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
+}
+
+detectar_path_traversal() {
+    clear
+    echo -e "${RED}"
+    pula_linha 1
+    echo "══════════════════════════ PATH TRAVERSAL ═══════════════════════════"
+    pula_linha 1
+    
+    local patterns=(
+        "\.\." "\.\./" "\.\.\\" "%2e%2e" "%2e%2e%2f"
+        "\.\.%2f" "\.\.%5c" "\.\.%255c"
+    )
+    
+    for pattern in "${patterns[@]}"; do
+        count=$(grep -i "$pattern" "$nome_arquivo" | wc -l)
+        if [[ $count -gt 0 ]]; then
+            echo -e "${RED}🚨 Path Traversal '$pattern': $count ocorrências${NC}"
+            grep -i "$pattern" "$nome_arquivo" | awk '{print $1, $7}' | head -3
+        fi
+    done
+    
+    pula_linha 1
+    echo "════════════════════════════════════════════════════════════════════════════════"
+    pula_linha 1
+    read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
+}
+
+analise_sessoes() {
+    clear
+    echo -e "${RED}"
+    pula_linha 1
+    echo "══════════════════════════ ANÁLISE DE SESSÕES ═══════════════════════════"
+    pula_linha 1
+    
+    echo -e "${CYAN}IPs com comportamento de sessão longa:${NC}"
+    
+    awk '{print $1, $7}' "$nome_arquivo" | sort -u | awk '{print $1}' | sort | uniq -c | sort -nr | head -10 | \
+    while read count ip; do
+        urls=$(awk -v ip="$ip" '$1 == ip {print $7}' "$nome_arquivo" | sort -u | wc -l)
+        echo "IP: $ip - URLs Únicas: $urls - Requisições: $count"
+    done
+    
+    pula_linha 1
+    echo "════════════════════════════════════════════════════════════════════════════════"
+    pula_linha 1
+    read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
+}
+
+detectar_data_leakage() {
+    clear
+    echo -e "${RED}"
+    pula_linha 1
+    echo "══════════════════════════ DETECÇÃO DE DATA LEAKAGE ═══════════════════════════"
+    pula_linha 1
+    
+    local sensitive_patterns=(
+        "password" "senha" "credential" "token" "api_key"
+        "secret" "private" "credit.card" "cpf" "cnpj"
+        "email" "telefone" "endereço"
+    )
+    
+    for pattern in "${sensitive_patterns[@]}"; do
+        count=$(grep -i "$pattern" "$nome_arquivo" | wc -l)
+        if [[ $count -gt 0 ]]; then
+            echo -e "${RED}🔓 Possível vazamento '$pattern': $count ocorrências${NC}"
+            
+            echo -e "${YELLOW}   Exemplos encontrados:${NC}"
+            grep -i "$pattern" "$nome_arquivo" | head -3 | while read line; do
+                sensitive_part=$(echo "$line" | grep -o -i ".{0,30}$pattern.{0,50}")
+                ip=$(echo "$line" | awk '{print $1}')
+                url=$(echo "$line" | awk '{print $7}')
+                echo "   → IP: $ip | URL: $url"
+                echo "     Dados: $sensitive_part"
+            done
+            pula_linha 1
+        fi
+    done
+    
+    pula_linha 1
+    echo -e "${CYAN}🔍 INVESTIGAÇÃO DETALHADA:${NC}"
+    
+    echo -e "${YELLOW}Padrões de credenciais em URLs:${NC}"
+    grep -i -E "password=[^&]*|senha=[^&]*|token=[^&]*" "$nome_arquivo" | awk '{print $1, $7}' | head -5
+    
+    pula_linha 1
+    
+    echo -e "${YELLOW}Dados sensíveis em parâmetros GET:${NC}"
+    grep -i -E "\?(.*password|.*senha|.*token|.*email|.*cpf)" "$nome_arquivo" | awk '{print $7}' | head -5
+    
+    pula_linha 1
+    echo "════════════════════════════════════════════════════════════════════════════════"
+    pula_linha 1
+    read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
+}
+
+analise_performance() {
+    clear
+    echo -e "${RED}"
+    pula_linha 1
+    echo "══════════════════════════ ANÁLISE DE PERFORMANCE ═══════════════════════════"
+    pula_linha 1
+    
+    echo -e "${CYAN}URLs Mais Lentas:${NC}"
+    awk '$10 > 5 {print $7, $10}' "$nome_arquivo" | sort -k2 -nr | head -10
+    
+    pula_linha 1
+    echo -e "${CYAN}Requisições Mais Pesadas:${NC}"
+    awk '$10 > 1048576 {print $7, $10/1048576 "MB"}' "$nome_arquivo" | sort -k2 -nr | head -10
+    
+    pula_linha 1
+    echo "════════════════════════════════════════════════════════════════════════════════"
+    pula_linha 1
+    read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
+}
+
+detectar_webshells() {
+    clear
+    echo -e "${RED}"
+    pula_linha 1
+    echo "══════════════════════════ DETECÇÃO DE WEB SHELLS ═══════════════════════════"
+    pula_linha 1
+    
+    local webshell_patterns=(
+        "cmd.php" "shell.php" "wso.php" "c99.php" "r57.php"
+        "b374k.php" "backdoor" "webadmin" "upload.php"
+        "\.php\?" "\.php\&" "\.php\."
+    )
+    
+    for pattern in "${webshell_patterns[@]}"; do
+        count=$(grep -i "$pattern" "$nome_arquivo" | wc -l)
+        if [[ $count -gt 0 ]]; then
+            echo -e "${RED}🛑 Possível Web Shell '$pattern': $count ocorrências${NC}"
+            grep -i "$pattern" "$nome_arquivo" | awk '{print $1, $7}' | head -3
+        fi
+    done
+    
+    pula_linha 1
+    echo "════════════════════════════════════════════════════════════════════════════════"
+    pula_linha 1
+    read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
+}
+
+fingerprinting_app() {
+    clear
+    echo -e "${RED}"
+    pula_linha 1
+    echo "══════════════════════════ FINGERPRINTING ═══════════════════════════"
+    pula_linha 1
+    
+    echo -e "${CYAN}Tecnologias Detectadas:${NC}"
+    
+    grep -q "wp-" "$nome_arquivo" && echo "✅ WordPress detectado"
+    grep -q "joomla" "$nome_arquivo" && echo "✅ Joomla detectado"
+    grep -q "drupal" "$nome_arquivo" && echo "✅ Drupal detectado"
+    
+    grep -q "laravel" "$nome_arquivo" && echo "✅ Laravel detectado"
+    grep -q "symfony" "$nome_arquivo" && echo "✅ Symfony detectado"
+    
+    grep -q "nginx" "$nome_arquivo" && echo "✅ Nginx detectado"
+    grep -q "apache" "$nome_arquivo" && echo "✅ Apache detectado"
+    
+    pula_linha 1
+    echo "════════════════════════════════════════════════════════════════════════════════"
+    pula_linha 1
+    read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
+}
+
+analise_api() {
+    clear
+    echo -e "${RED}"
+    pula_linha 1
+    echo "══════════════════════════ CHAMADAS DE API ═══════════════════════════"
+    pula_linha 1
+    
+    echo -e "${CYAN}Endpoints de API:${NC}"
+    grep -E "(api|v[0-9]|rest|graphql|soap)" "$nome_arquivo" | awk '{print $7}' | sort -u | head -20
+    
+    pula_linha 1
+    echo -e "${CYAN}Métodos HTTP em APIs:${NC}"
+    grep -E "(api|v[0-9]|rest)" "$nome_arquivo" | awk '{print $6, $7}' | sed 's/"//g' | sort | uniq -c | sort -nr | head -10
+    
+    pula_linha 1
+    echo "════════════════════════════════════════════════════════════════════════════════"
+    pula_linha 1
+    read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
+}
+
+detectar_credential_stuffing() {
+    clear
+    echo -e "${RED}"
+    pula_linha 1
+    echo "══════════════════════════ CREDENTIAL STUFFING ═══════════════════════════"
+    pula_linha 1
+    
+    echo -e "${RED}🔍 DETECTANDO TENTATIVAS DE CREDENTIAL STUFFING:${NC}"
+    pula_linha 1
+    
+    echo -e "${CYAN}1. Tentativas de login com erro 401:${NC}"
+    resultados_401=$(awk '$7 ~ /(login|auth|signin|logar|autenticar)/ && $9 == "401"' "$nome_arquivo" | awk '{print $1}' | sort | uniq -c | sort -nr | head -10)
+    
+    if [[ -n "$resultados_401" ]]; then
+        echo "$resultados_401" | while read count ip; do
+            echo -e "${RED}🚨 IP: $ip - $count tentativas com erro 401${NC}"
+        done
+    else
+        echo "Nenhuma tentativa de login com erro 401 encontrada"
+    fi
+    
+    pula_linha 1
+    
+    echo -e "${CYAN}2. IPs com muitas requisições para páginas de login:${NC}"
+    awk '$7 ~ /(login|auth|signin|logar|autenticar|password|senha)/ {print $1}' "$nome_arquivo" | sort | uniq -c | sort -nr | head -10 | \
+    while read count ip; do
+        if [[ $count -gt 10 ]]; then
+            echo -e "${YELLOW}⚠️  IP: $ip - $count requisições para login${NC}"
+        fi
+    done
+    
+    pula_linha 1
+    
+    echo -e "${CYAN}3. Possíveis ataques brute force:${NC}"
+    awk '$7 ~ /(login|auth)/ {print $1, $4}' "$nome_arquivo" | \
+    awk '{
+        split($2, dt, ":"); 
+        minuto = dt[1] ":" dt[2];
+        print $1, minuto
+    }' | sort | uniq -c | sort -nr | head -10 | \
+    while read count ip_minuto; do
+        ip=$(echo "$ip_minuto" | awk '{print $2}')
+        minuto=$(echo "$ip_minuto" | awk '{print $3}')
+        if [[ $count -gt 5 ]]; then
+            echo -e "${RED}🚨 IP: $ip - $count tentativas no minuto $minuto${NC}"
+        fi
+    done
+    
+    pula_linha 1
+    
+    echo -e "${CYAN}4. URLs de login mais visadas:${NC}"
+    awk '$7 ~ /(login|auth|signin)/ {print $7}' "$nome_arquivo" | sort | uniq -c | sort -nr | head -5
+    
+    pula_linha 1
+    
+    echo -e "${CYAN}5. RESUMO GERAL:${NC}"
+    total_logins=$(awk '$7 ~ /(login|auth|signin)/' "$nome_arquivo" | wc -l)
+    ips_unicos_login=$(awk '$7 ~ /(login|auth|signin)/ {print $1}' "$nome_arquivo" | sort -u | wc -l)
+    erros_401=$(awk '$9 == "401"' "$nome_arquivo" | wc -l)
+    
+    echo "Total de requisições para login: $total_logins"
+    echo "IPs únicos acessando login: $ips_unicos_login"
+    echo "Erros 401 (não autorizado): $erros_401"
+    
+    if [[ $total_logins -gt 0 ]]; then
+        media=$(($total_logins / $ips_unicos_login))
+        echo "Média de tentativas por IP: $media"
+        
+        if [[ $media -gt 20 ]]; then
+            echo -e "${RED}🚨 ALERTA: Possível credential stuffing detectado!${NC}"
+        elif [[ $media -gt 10 ]]; then
+            echo -e "${YELLOW}⚠️  AVISO: Comportamento suspeito detectado${NC}"
+        else
+            echo -e "${GREEN}✅ Comportamento normal${NC}"
+        fi
+    fi
+    
+    pula_linha 1
+    echo "════════════════════════════════════════════════════════════════════════════════"
+    pula_linha 1
+    echo -e "${NC}"
+    read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
 }
 
 buscar_passwd() {
+    clear
     echo -e "${RED}"
     pula_linha 1
-    echo " Buscar informações de usuários no /etc/passwd "
+    echo "══════════════════════════ INFORMAÇÕES DO /etc/passwd ═══════════════════════════"
     pula_linha 1
 
-    awk -F: '{ printf "Usuário: %s\nUID: %s\nGID: %s\nHome: %s\nShell: %s\n\n", $1, $3, $4, $6, $7 }' /etc/passwd
+    if [ -r "/etc/passwd" ]; then
+        echo -e "${CYAN}Usuários do sistema (primeiros 20):${NC}"
+        awk -F: '
+        BEGIN {
+            printf "%-15s %-8s %-8s %-20s %-15s\n", "Usuário", "UID", "GID", "Home", "Shell"
+            printf "%-15s %-8s %-8s %-20s %-15s\n", "-------", "---", "---", "----", "-----"
+        }
+        {
+            if (NR <= 20) {
+                printf "%-15s %-8s %-8s %-20s %-15s\n", $1, $3, $4, $6, $7
+            }
+        }' /etc/passwd
 
+        pula_linha 1
+        echo -e "${CYAN}Estatísticas do /etc/passwd:${NC}"
+        local total_usuarios=$(wc -l < /etc/passwd)
+        local usuarios_root=$(awk -F: '$3 == "0" {print $1}' /etc/passwd | wc -l)
+        local usuarios_sistema=$(awk -F: '$3 < 1000 && $3 != "0" {print $1}' /etc/passwd | wc -l)
+        local usuarios_normais=$(awk -F: '$3 >= 1000 {print $1}' /etc/passwd | wc -l)
+        
+        echo "Total de usuários: $total_usuarios"
+        echo "Usuários root (UID 0): $usuarios_root"
+        echo "Usuários do sistema: $usuarios_sistema"
+        echo "Usuários normais: $usuarios_normais"
+
+        pula_linha 1
+        echo -e "${YELLOW}Usuários root (UID 0):${NC}"
+        awk -F: '$3 == "0" {print "→ " $1 " (UID: " $3 ", Shell: " $7 ")"}' /etc/passwd
+
+        pula_linha 1
+        echo -e "${RED}Usuários com shell de login:${NC}"
+        awk -F: '$7 ~ /\/(bash|sh|zsh|tcsh|csh|ksh)$/ {print "→ " $1 " (" $7 ")"}' /etc/passwd | head -10
+
+    else
+        echo -e "${RED}❌ Não foi possível ler o arquivo /etc/passwd${NC}"
+        echo "Permissão negada ou arquivo não existe"
+    fi
+
+    pula_linha 1
+    echo "════════════════════════════════════════════════════════════════════════════════"
     pula_linha 1
     read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
-    clear
 }
 
-main() {
-    adicionar_arquivo
+analise_mobile_desktop() {
+    clear
+    echo -e "${RED}"
+    pula_linha 1
+    echo "══════════════════════════ MOBILE vs DESKTOP ═══════════════════════════"
+    pula_linha 1
+    
+    local mobile=$(grep -i "mobile\|android\|iphone\|ipad" "$nome_arquivo" | wc -l)
+    local desktop=$(grep -v -i "mobile\|android\|iphone\|ipad" "$nome_arquivo" | wc -l)
+    local total=$((mobile + desktop))
+    
+    if [[ $total -gt 0 ]]; then
+        echo -e "${CYAN}Dispositivos:${NC}"
+        echo "Mobile: $mobile ($((mobile * 100 / total))%)"
+        echo "Desktop: $desktop ($((desktop * 100 / total))%)"
+    else
+        echo "Nenhum dado para análise"
+    fi
+    
+    pula_linha 1
+    echo "════════════════════════════════════════════════════════════════════════════════"
+    pula_linha 1
+    read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
+}
 
-    while true; do
-        exibir_menu
-        if [ "$escolha" -eq 1 ]; then
-            contagem_linhas_arq
-	elif [ "$escolha" -eq 2 ]; then
-            buscar_ips
-        elif [ "$escolha" -eq 3 ]; then
-	    distribuicao_codigos_status
-	elif [ "$escolha" -eq 4 ]; then
-            urls_mais_acessadas
-	elif [ "$escolha" -eq 5 ]; then
-            metodos_por_ip
-	elif [ "$escolha" -eq 6 ]; then
-            ips_suspeitos
-	elif [ "$escolha" -eq 7 ]; then
-            vizualizador_trafego
-	elif [ "$escolha" -eq 8 ]; then
-            verificar_referers
-	elif [ "$escolha" -eq 9 ]; then
-            buscar_passwd
-	elif [ "$escolha" -eq 0 ]; then
-	    echo -e "${YELLOW}"
-	    pula_linha 1
-            echo "Saindo do programa..."
-	    pula_linha 1
-            echo "até logo..."
-            exit 0
+investigar_por_data() {
+    clear
+    echo -e "${RED}"
+    pula_linha 1
+    echo "══════════════════════════ INVESTIGAÇÃO POR DATA ═══════════════════════════"
+    pula_linha 1
+    
+    echo -e "${CYAN}DATAS COM MAIOR TRÁFEGO (possíveis ataques):${NC}"
+    awk '{print $4}' "$nome_arquivo" | cut -d: -f1 | cut -d[ -f2 | sort | uniq -c | sort -nr | head -10 | \
+    while read count data; do
+        if [[ $count -gt 1000 ]]; then
+            echo -e "${RED}🚨 $data - $count requisições${NC}"
+        elif [[ $count -gt 500 ]]; then
+            echo -e "${YELLOW}⚠️  $data - $count requisições${NC}"
         else
-            echo -e "${YELLOW}"
-	    pula_linha 1
-            echo "Por favor digite somente números dentro do escopo do Menu."
-            pula_linha 1
-	    read -n 1 -s -r -p "Pressione qualqr tecla..."
-	    clear
-	fi
+            echo -e "${GREEN}✅ $data - $count requisições${NC}"
+        fi
+    done
+    
+    pula_linha 1
+    echo -e "${CYAN}Digite a data que deseja investigar (ex: 13/Feb/2015):${NC}"
+    read -p "Data: " data_investigar
+    
+    if ! grep -q "$data_investigar" "$nome_arquivo"; then
+        echo -e "${RED}Data '$data_investigar' não encontrada no arquivo de log!${NC}"
+        sleep 2
+        return
+    fi
+    
+    pula_linha 1
+    echo -e "${RED}🔍 INVESTIGANDO DATA: $data_investigar${NC}"
+    pula_linha 1
+    
+    echo -e "${CYAN}TOP 10 IPs NA DATA $data_investigar:${NC}"
+    awk -v data="$data_investigar" '$4 ~ data {print $1}' "$nome_arquivo" | sort | uniq -c | sort -nr | head -10
+    
+    pula_linha 1
+
+    echo -e "${CYAN}PÁGINAS MAIS ACESSADAS:${NC}"
+    awk -v data="$data_investigar" '$4 ~ data {print $7}' "$nome_arquivo" | sort | uniq -c | sort -nr | head -15
+    
+    pula_linha 1
+    
+    echo -e "${CYAN}MÉTODOS HTTP UTILIZADOS:${NC}"
+    awk -v data="$data_investigar" '$4 ~ data {print $6}' "$nome_arquivo" | sed 's/"//g' | sort | uniq -c | sort -nr
+    
+    pula_linha 1
+    
+    echo -e "${CYAN}CÓDIGOS DE STATUS:${NC}"
+    awk -v data="$data_investigar" '$4 ~ data {print $9}' "$nome_arquivo" | sort | uniq -c | sort -nr
+    
+    pula_linha 1
+    
+    echo -e "${GREEN} CAMINHOS COM SUCESSO (Código 200):${NC}"
+    awk -v data="$data_investigar" '$4 ~ data && $9 == "200" {print $7}' "$nome_arquivo" | sort | uniq -c | sort -nr | head -15
+    
+    pula_linha 1
+    
+    echo -e "${CYAN}USER-AGENTS SUSPEITOS:${NC}"
+    awk -v data="$data_investigar" '$4 ~ data {print $0}' "$nome_arquivo" | awk -F\" '{print $6}' | \
+    grep -i -E "bot|scanner|crawler|nikto|sqlmap" | sort | uniq -c | sort -nr | head -5
+    
+    pula_linha 1
+    
+    echo -e "${CYAN} RESUMO DA DATA $data_investigar:${NC}"
+    total_requisicoes=$(awk -v data="$data_investigar" '$4 ~ data' "$nome_arquivo" | wc -l)
+    sucessos_200=$(awk -v data="$data_investigar" '$4 ~ data && $9 == "200"' "$nome_arquivo" | wc -l)
+    erros_404=$(awk -v data="$data_investigar" '$4 ~ data && $9 == "404"' "$nome_arquivo" | wc -l)
+    erros_500=$(awk -v data="$data_investigar" '$4 ~ data && $9 == "500"' "$nome_arquivo" | wc -l)
+
+    if [[ $total_requisicoes -gt 0 ]]; then
+        percent_sucessos=$(echo "$sucessos_200 $total_requisicoes" | awk '{printf "%.1f", ($1/$2)*100}')
+        percent_404=$(echo "$erros_404 $total_requisicoes" | awk '{printf "%.1f", ($1/$2)*100}')
+        percent_500=$(echo "$erros_500 $total_requisicoes" | awk '{printf "%.1f", ($1/$2)*100}')
+    else
+        percent_sucessos="0.0"
+        percent_404="0.0" 
+        percent_500="0.0"
+    fi
+    
+    echo "Total de requisições: $total_requisicoes"
+    echo "Sucessos (200): $sucessos_200 (${percent_sucessos}%)"
+    echo "Erros 404: $erros_404 (${percent_404}%)"
+    echo "Erros 500: $erros_500 (${percent_500}%)"
+    
+    pula_linha 1
+    echo "════════════════════════════════════════════════════════════════════════════════"
+    pula_linha 1
+    echo -e "${NC}"
+    read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
+}
+
+help() {
+    clear
+    echo -e "${RED}"
+    echo "════════════════════════════════════════════════════════════════════════════════"
+    echo "                           🛡️  DISCLAIMER LEGAL"
+    echo "════════════════════════════════════════════════════════════════════════════════"
+    echo ""
+    echo "📜 ESTE SOFTWARE É FORNECIDO 'COMO ESTÁ', SEM GARANTIAS DE QUALQUER TIPO."
+    echo ""
+    echo "⚖️  USO RESPONSÁVEL:"
+    echo "   • Use apenas em sistemas que você possui ou tem autorização explícita"
+    echo "   • Não utilize para atividades maliciosas ou não autorizadas"
+    echo "   • Respeite as leis de privacidade e propriedade intelectual"
+    echo ""
+    echo "🔒 LIMITAÇÕES:"
+    echo "   • Não nos responsabilizamos pelo uso indevido deste software"
+    echo "   • O usuário assume total responsabilidade por suas ações"
+    echo "   • Mantenha-se dentro dos limites legais da sua jurisdição"
+    echo ""
+    echo "🌐 LICENÇA:"
+    echo "   • GNU AGPL v3 - Veja o arquivo LICENSE para detalhes completos"
+    echo "   • Código aberto para fins educacionais e de segurança legítima"
+    echo ""
+    echo "⚠️  AVISO:"
+    echo "   Teste de penetração sem autorização é CRIME em muitos países!"
+    echo "════════════════════════════════════════════════════════════════════════════════"
+    echo -e "${NC}"
+    read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
+}
+
+exportar_relatorio() {
+    local relatorio_dir="relatorio_$(date +%Y%m%d_%H%M%S)"
+    mkdir -p "$relatorio_dir"
+    
+    echo -e "${GREEN}Exportando análises para $relatorio_dir/...${NC}"
+    echo -e "${YELLOW}Isso pode levar alguns instantes...${NC}"
+    
+    {
+        echo "RELATÓRIO DE ANÁLISE - VISÃO APACHE"
+        echo "======================================"
+        echo "Arquivo analisado: $nome_arquivo"
+        echo "Data da análise: $(date)"
+        echo "======================================"
+        echo ""
+    } > "$relatorio_dir/00_relatorio_completo.txt"
+    
+    contagem_linhas_arq >> "$relatorio_dir/00_relatorio_completo.txt" 2>&1
+    contagem_linhas_arq > "$relatorio_dir/01_info_arquivo.txt" 2>&1
+    
+    buscar_ips >> "$relatorio_dir/00_relatorio_completo.txt" 2>&1
+    buscar_ips > "$relatorio_dir/02_analise_ips.txt" 2>&1
+    
+    distribuicao_codigos_status >> "$relatorio_dir/00_relatorio_completo.txt" 2>&1
+    distribuicao_codigos_status > "$relatorio_dir/03_codigos_status.txt" 2>&1
+    
+    urls_mais_acessadas >> "$relatorio_dir/00_relatorio_completo.txt" 2>&1
+    urls_mais_acessadas > "$relatorio_dir/04_urls_acessadas.txt" 2>&1
+    
+    detectar_scanners >> "$relatorio_dir/00_relatorio_completo.txt" 2>&1
+    detectar_scanners > "$relatorio_dir/05_scanners.txt" 2>&1
+    
+    buscar_padroes_suspeitos >> "$relatorio_dir/00_relatorio_completo.txt" 2>&1
+    buscar_padroes_suspeitos > "$relatorio_dir/06_padroes_suspeitos.txt" 2>&1
+    
+    detectar_ddos >> "$relatorio_dir/00_relatorio_completo.txt" 2>&1
+    detectar_ddos > "$relatorio_dir/07_ddos.txt" 2>&1
+    
+    detectar_webshells >> "$relatorio_dir/00_relatorio_completo.txt" 2>&1
+    detectar_webshells > "$relatorio_dir/08_webshells.txt" 2>&1
+    
+    detectar_data_leakage >> "$relatorio_dir/00_relatorio_completo.txt" 2>&1
+    detectar_data_leakage > "$relatorio_dir/09_data_leakage.txt" 2>&1
+    
+    detectar_path_traversal >> "$relatorio_dir/00_relatorio_completo.txt" 2>&1
+    detectar_path_traversal > "$relatorio_dir/10_path_traversal.txt" 2>&1
+    
+    analise_performance >> "$relatorio_dir/00_relatorio_completo.txt" 2>&1
+    analise_performance > "$relatorio_dir/11_performance.txt" 2>&1
+    
+    {
+        echo ""
+        echo "======================================"
+        echo "RELATÓRIO FINALIZADO"
+        echo "Arquivos gerados em: $relatorio_dir/"
+        echo "Total de análises: 12"
+        echo "======================================"
+    } >> "$relatorio_dir/00_relatorio_completo.txt"
+    
+    echo -e "${GREEN}Relatório completo salvo em: $relatorio_dir/${NC}"
+    echo -e "${CYAN}Arquivo principal: 00_relatorio_completo.txt${NC}"
+    sleep 3
+}
+main() {
+    while true; do
+        if [[ -z "$nome_arquivo" ]] || [[ ! -f "$nome_arquivo" ]]; then
+            if ! adicionar_arquivo; then
+                echo "Saindo..."
+                exit 0
+            fi
+        fi
+
+        exibir_menu
+        read -p "Escolha uma opção: " escolha
+
+        case $escolha in
+            1) contagem_linhas_arq ;;
+            2) buscar_ips ;;
+            3) distribuicao_codigos_status ;;
+            4) urls_mais_acessadas ;;
+            5) metodos_por_ip ;;
+            6) ips_suspeitos ;;
+            7) vizualizador_trafego ;;
+            8) verificar_referers ;;
+            9) buscar_padroes_suspeitos ;;
+            10) estatisticas_avancadas ;;
+            11) detectar_scanners ;;
+            12) analise_geografica ;;
+            13) detectar_ddos ;;
+            14) analise_crawlers ;;
+            15) detectar_path_traversal ;;
+            16) analise_sessoes ;;
+            17) detectar_data_leakage ;;
+            18) analise_performance ;;
+            19) detectar_webshells ;;
+            20) fingerprinting_app ;;
+            21) analise_api ;;
+            22) detectar_credential_stuffing ;;
+            23) analise_mobile_desktop ;;
+            24) buscar_passwd ;;
+            25) investigar_por_data ;;
+            26) exportar_relatorio ;;
+            27) help ;;
+            0)
+                echo -e "${YELLOW}Saindo do programa...${NC}"
+                exit 0
+                ;;
+            *)
+                echo -e "${RED}Opção inválida!${NC}"
+                sleep 2
+                ;;
+        esac
     done
 }
+
+for cmd in awk grep sort uniq wc du head tail; do
+    if ! command -v $cmd &> /dev/null; then
+        echo -e "${RED}Erro: Comando $cmd não encontrado${NC}"
+        exit 1
+    fi
+done
+
+if ! command -v whois &> /dev/null; then
+    echo -e "${YELLOW}Aviso: Comando 'whois' não encontrado. A análise geográfica será limitada.${NC}"
+    sleep 2
+fi
 
 main
