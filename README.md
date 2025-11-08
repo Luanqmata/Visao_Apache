@@ -268,15 +268,7 @@ tail -f access.log | ./visao_apache.sh
 
 ---
 
-# Vizualização do Menu
-
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/edff9e7b-bfb6-4593-bdce-ccc1084c6d98" alt="Análises Avançadas" width="80%">
-</p>
-
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/8bfd76fa-5763-4dbb-a34b-1e895440f377" alt="Exportação de Relatórios" width="80%">
-</p>
+# Visao Apache
 
 <p align="center">
   <img src="https://github.com/user-attachments/assets/f66647c0-9443-47d1-8403-828b7f737c87" alt="Relatórios Detalhados" width="80%">
