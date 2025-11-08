@@ -1,6 +1,10 @@
 # 🛡️ Visão Apache - Analisador de Logs de Segurança
 
-![Banner](https://github.com/user-attachments/assets/b7724dac-b403-4332-b1ec-bb79cbfc6903)
+<p align="center">
+
+  ![Banner](https://github.com/user-attachments/assets/b7724dac-b403-4332-b1ec-bb79cbfc6903)
+
+</p>
 
 ## 📋 Sobre o Projeto
 O **Visão Apache** é uma ferramenta avançada de análise de logs de servidores web escrita em **Bash**, projetada para detectar padrões suspeitos, tentativas de invasão e ameaças de segurança em arquivos de log do Apache.
@@ -55,7 +59,12 @@ mv seu_arquivo_de_log.log ./
 ```
 
 ### Passo 3: Carregar o Arquivo
+
+<p align="center">
+
 ![Menu](https://github.com/user-attachments/assets/92ada7ce-5bc2-42b2-aa66-18496ff8deb1)
+
+</p>
 
 Dentro do programa:
 1. Selecione a opção **1** para usar arquivo no diretório atual
@@ -65,7 +74,7 @@ Dentro do programa:
 ---
 
 ## 🎮 Menu de Funcionalidades
-![Menu](https://github.com/user-attachments/assets/6e0d8f80-51dd-4cdc-ac90-49f584553d14)
+
 
 | Opção | Funcionalidade | Descrição |
 |--------|----------------|------------|
@@ -83,7 +92,7 @@ Dentro do programa:
 ---
 
 ## 🛡️ Detecção de Ameaças
-![Ameaças](https://github.com/user-attachments/assets/aaf0e560-1c3f-4857-b5dc-f44ea9d13ae0)
+
 
 | Opção | Funcionalidade | Detecta |
 |--------|----------------|----------|
@@ -99,7 +108,7 @@ Dentro do programa:
 ---
 
 ## 📊 Análises Avançadas
-![Análises](https://github.com/user-attachments/assets/edff9e7b-bfb6-4593-bdce-ccc1084c6d98)
+
 
 | Opção | Funcionalidade |
 |--------|----------------|
@@ -117,7 +126,6 @@ Dentro do programa:
 ---
 
 ## 📤 Exportação de Relatórios
-![Exportação](https://github.com/user-attachments/assets/f66647c0-9443-47d1-8403-828b7f737c87)
 
 **Opção 29:** Exporta um relatório executivo completo com:
 - ✅ Score de risco
