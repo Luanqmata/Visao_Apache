@@ -68,11 +68,11 @@ Dentro do programa:
 
 ---
 
-## 🎮 Menu de Funcionalidades
-
 <p align="center">
   <img width="609" height="817" alt="image" src="https://github.com/user-attachments/assets/b2a10b04-81ca-4f85-9ef9-18d9534281c1" />
 </p>
+
+## 🎮 Menu de Funcionalidades
 
 <div align="center">
   
