@@ -915,36 +915,70 @@ detectar_credential_stuffing() {
     done
     
     pula_linha 1
-    
+
     echo -e "${CYAN}3. Possíveis ataques brute force (por minuto):${NC}"
-    # CORREÇÃO COMPLETA do processamento de data/hora
-    awk -v pattern="$login_patterns" '$7 ~ pattern {
-        gsub(/\[/, "", $4);
-        split($4, dt, /[/:]/);
-        if (length(dt) >= 4) {
-            data = dt[1]"/"dt[2]"/"dt[3];
-            hora = dt[4];
-            minuto = dt[5];
-            print $1, data ":" hora ":" minuto
+    
+    # DEBUG: Verifique o formato das datas no seu arquivo
+    echo -e "${YELLOW}📅 Analisando formato de datas...${NC}"
+    head -5 "$nome_arquivo" | awk '{print "Data exemplo: " $4}'
+    
+    # SOLUÇÃO DEFINITIVA
+    awk -v pattern="$login_patterns" -v threshold="$threshold_minuto" '
+        $7 ~ pattern {
+            # Remove colchetes da data
+            gsub(/\[|\]/, "", $4);
+            
+            # Divide data/hora
+            split($4, datetime, ":");
+            date_hour = datetime[1] ":" datetime[2];  # Formato: 13/Feb/2015:08
+            
+            # Conta por IP + data+hora
+            count[date_hour "|" $1]++
         }
-    }' "$nome_arquivo" | \
-    sort | uniq -c | sort -nr | head -10 | \
-    while read count ip_minuto; do
-        ip=$(echo "$ip_minuto" | awk '{print $2}')
-        data_hora=$(echo "$ip_minuto" | awk '{for(i=3;i<=NF;i++) printf $i " "; print ""}' | sed 's/ $//')
-        
-        if [[ $count -gt $threshold_minuto && "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        END {
+            for (key in count) {
+                if (count[key] > threshold) {
+                    split(key, parts, "|");
+                    date_hour = parts[1];
+                    ip = parts[2];
+                    print count[key], ip, date_hour
+                }
+            }
+        }
+    ' "$nome_arquivo" | sort -nr | head -10 | \
+    while read count ip data_hora; do
+        if [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo -e "${RED}🚨 BRUTE FORCE: IP $ip - $count tentativas em $data_hora${NC}"
             
-            # Detalhes adicionais - CORRIGIDO
-            urls=$(awk -v ip="$ip" -v pattern="$login_patterns" -v dh="$data_hora" \
-                   '$1 == ip && $7 ~ pattern && $4 ~ dh {print $7}' "$nome_arquivo" | sort -u | head -3 | tr '\n' ' ')
+            # URLs acessadas por este IP neste período
+            urls=$(awk -v ip="$ip" -v dh="$data_hora" -v pattern="$login_patterns" '
+                $1 == ip && $4 ~ dh && $7 ~ pattern {print $7}
+            ' "$nome_arquivo" | sort -u | head -3 | tr '\n' ' ' | sed 's/ $//')
+            
             if [[ -n "$urls" ]]; then
                 echo -e "   🔗 URLs: $urls"
             fi
         fi
     done
-    
+
+    # Se nenhum resultado for encontrado
+    if ! awk -v pattern="$login_patterns" '$7 ~ pattern' "$nome_arquivo" | grep -q .; then
+        echo "Nenhuma requisição de login encontrada para análise"
+    elif [[ $(awk -v pattern="$login_patterns" -v threshold="$threshold_minuto" '
+        $7 ~ pattern {
+            gsub(/\[|\]/, "", $4);
+            split($4, dt, ":");
+            key = dt[1] ":" dt[2] "|" $1;
+            count[key]++
+        }
+        END {
+            for (k in count) if (count[k] > threshold && k ~ /^[0-9]/) exit 1;
+            exit 0
+        }
+    ' "$nome_arquivo") -eq 0 ]]; then
+        echo "Nenhum padrão de brute force detectado (threshold: ${threshold_minuto} req/min)"
+    fi
+
     pula_linha 1
     
     echo -e "${CYAN}4. URLs de autenticação mais visadas:${NC}"
