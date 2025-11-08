@@ -95,35 +95,40 @@ Dentro do programa:
 
 ## 🛡️ Detecção de Ameaças
 
-
-| Opção | Funcionalidade | Detecta |
-|--------|----------------|----------|
-| 11 | Scanners | Nikto, SQLMap, Nmap, etc |
-| 13 | DDoS | Padrões de ataque distribuído |
-| 15 | Path Traversal | Tentativas de acesso a diretórios |
-| 17 | Data Leakage | Vazamento de dados sensíveis |
-| 19 | Web Shells | Backdoors e shells remotos |
-| 22 | Credential Stuffing | Ataques de força bruta |
-| 26 | Payloads suspeitos | SQLi, XSS, Command Injection |
-| 28 | Port Scan | Varredura de portas |
-
+<div align="center">
+  
+  | Opção | Funcionalidade | Detecta |
+  |--------|----------------|----------|
+  | 11 | Scanners | Nikto, SQLMap, Nmap, etc |
+  | 13 | DDoS | Padrões de ataque distribuído |
+  | 15 | Path Traversal | Tentativas de acesso a diretórios |
+  | 17 | Data Leakage | Vazamento de dados sensíveis |
+  | 19 | Web Shells | Backdoors e shells remotos |
+  | 22 | Credential Stuffing | Ataques de força bruta |
+  | 26 | Payloads suspeitos | SQLi, XSS, Command Injection |
+  | 28 | Port Scan | Varredura de portas |
+  
+</div>
 ---
 
 ## 📊 Análises Avançadas
 
-
-| Opção | Funcionalidade |
-|--------|----------------|
-| 12 | Análise Geográfica |
-| 14 | Crawlers Legítimos |
-| 16 | Análise de Sessões |
-| 18 | Análise de Performance |
-| 20 | Fingerprinting |
-| 21 | Análise API |
-| 23 | Mobile vs Desktop |
-| 24 | Informações do sistema |
-| 25 | Investigação por data |
-| 27 | Análise de redirecionamentos |
+<div align="center">
+  
+  | Opção | Funcionalidade |
+  |--------|----------------|
+  | 12 | Análise Geográfica |
+  | 14 | Crawlers Legítimos |
+  | 16 | Análise de Sessões |
+  | 18 | Análise de Performance |
+  | 20 | Fingerprinting |
+  | 21 | Análise API |
+  | 23 | Mobile vs Desktop |
+  | 24 | Informações do sistema |
+  | 25 | Investigação por data |
+  | 27 | Análise de redirecionamentos |
+  
+</div>
 
 ---
 
