@@ -271,14 +271,6 @@ tail -f access.log | ./visao_apache.sh
 # Vizualização do Menu
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/6e0d8f80-51dd-4cdc-ac90-49f584553d14" alt="Menu Principal" width="80%">
-</p>
-
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/aaf0e560-1c3f-4857-b5dc-f44ea9d13ae0" alt="Detecção de Ameaças" width="80%">
-</p>
-
-<p align="center">
   <img src="https://github.com/user-attachments/assets/edff9e7b-bfb6-4593-bdce-ccc1084c6d98" alt="Análises Avançadas" width="80%">
 </p>
 
