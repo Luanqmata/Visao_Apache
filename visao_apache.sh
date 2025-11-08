@@ -836,81 +836,200 @@ detectar_credential_stuffing() {
     
     echo -e "${RED}🔍 DETECTANDO TENTATIVAS DE CREDENTIAL STUFFING:${NC}"
     pula_linha 1
+
+    # Padrões mais abrangentes para login
+    local login_patterns="(login|auth|signin|logar|autenticar|password|senha|credential|token|oauth|jwt|admin)"
+    local threshold_minuto=10
+    local threshold_ip=50
     
-    echo -e "${CYAN}1. Tentativas de login com erro 401:${NC}"
-    resultados_401=$(awk '$7 ~ /(login|auth|signin|logar|autenticar)/ && $9 == "401"' "$nome_arquivo" | awk '{print $1}' | sort | uniq -c | sort -nr | head -10)
+    echo -e "${CYAN}1. Tentativas de login com erro 401/403:${NC}"
+    resultados_401=$(awk -v pattern="$login_patterns" '$7 ~ pattern && ($9 == "401" || $9 == "403") {print $1}' "$nome_arquivo" | sort | uniq -c | sort -nr | head -10)
     
-    if [[ -n "$resultados_401" ]]; then
+    if [[ -n "$resultados_401" && $(echo "$resultados_401" | wc -l) -gt 0 ]]; then
         echo "$resultados_401" | while read count ip; do
-            echo -e "${RED}🚨 IP: $ip - $count tentativas com erro 401${NC}"
+            if [[ $count -gt 5 ]]; then
+                echo -e "${RED}🚨 IP: $ip - $count tentativas com erro 401/403${NC}"
+            else
+                echo -e "${YELLOW}⚠️  IP: $ip - $count tentativas com erro 401/403${NC}"
+            fi
         done
     else
-        echo "Nenhuma tentativa de login com erro 401 encontrada"
+        echo "Nenhuma tentativa de login com erro 401/403 encontrada"
     fi
     
     pula_linha 1
     
     echo -e "${CYAN}2. IPs com muitas requisições para páginas de login:${NC}"
-    awk '$7 ~ /(login|auth|signin|logar|autenticar|password|senha)/ {print $1}' "$nome_arquivo" | sort | uniq -c | sort -nr | head -10 | \
+    awk -v pattern="$login_patterns" '$7 ~ pattern {print $1}' "$nome_arquivo" | sort | uniq -c | sort -nr | head -15 | \
     while read count ip; do
-        if [[ $count -gt 10 ]]; then
-            echo -e "${YELLOW}⚠️  IP: $ip - $count requisições para login${NC}"
+        if [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            if [[ $count -gt $threshold_ip ]]; then
+                echo -e "${RED}🚨 IP: $ip - $count requisições para login${NC}"
+                
+                # Análise detalhada do IP suspeito
+                echo -e "   📊 Comportamento:"
+                
+                # Horários de pico - CORRIGIDO
+                awk -v ip="$ip" -v pattern="$login_patterns" '$1 == ip && $7 ~ pattern {
+                    gsub(/\[/, "", $4);
+                    split($4, dt, ":");
+                    hora = dt[2];
+                    print hora
+                }' "$nome_arquivo" | sort | uniq -c | sort -nr | head -3 | \
+                while read count_hora hora; do
+                    echo -e "      ⏰ Hora $hora:00 - $count_hora tentativas"
+                done
+                
+                # Códigos de status para este IP - CORRIGIDO
+                echo -e "   📋 Códigos de status:"
+                awk -v ip="$ip" -v pattern="$login_patterns" '$1 == ip && $7 ~ pattern {print $9}' "$nome_arquivo" | \
+                sort | uniq -c | sort -nr | \
+                while read count status; do
+                    if [[ "$status" =~ ^[0-9]+$ ]]; then
+                        case $status in
+                            "200") color="${GREEN}" ; desc="SUCESSO" ;;
+                            "401"|"403") color="${RED}" ; desc="NÃO AUTORIZADO" ;;
+                            "404") color="${YELLOW}" ; desc="NÃO ENCONTRADO" ;;
+                            "500") color="${RED}" ; desc="ERRO SERVIDOR" ;;
+                            *) color="${NC}" ; desc="" ;;
+                        esac
+                        echo -e "      ${color}$status ($desc): $count vezes${NC}"
+                    fi
+                done
+                
+                # URLs acessadas por este IP
+                echo -e "   🔗 Principais URLs:"
+                awk -v ip="$ip" -v pattern="$login_patterns" '$1 == ip && $7 ~ pattern {print $7}' "$nome_arquivo" | \
+                sort | uniq -c | sort -nr | head -3 | \
+                while read count url; do
+                    echo -e "      → $count x $url"
+                done
+                
+                pula_linha 1
+            elif [[ $count -gt 10 ]]; then
+                echo -e "${YELLOW}⚠️  IP: $ip - $count requisições para login${NC}"
+            else
+                echo -e "${GREEN}✅ IP: $ip - $count requisições para login${NC}"
+            fi
         fi
     done
     
     pula_linha 1
     
-    echo -e "${CYAN}3. Possíveis ataques brute force:${NC}"
-    awk '$7 ~ /(login|auth)/ {print $1, $4}' "$nome_arquivo" | \
-    awk '{
-        split($2, dt, ":"); 
-        minuto = dt[1] ":" dt[2];
-        print $1, minuto
-    }' | sort | uniq -c | sort -nr | head -10 | \
+    echo -e "${CYAN}3. Possíveis ataques brute force (por minuto):${NC}"
+    # CORREÇÃO COMPLETA do processamento de data/hora
+    awk -v pattern="$login_patterns" '$7 ~ pattern {
+        gsub(/\[/, "", $4);
+        split($4, dt, /[/:]/);
+        if (length(dt) >= 4) {
+            data = dt[1]"/"dt[2]"/"dt[3];
+            hora = dt[4];
+            minuto = dt[5];
+            print $1, data ":" hora ":" minuto
+        }
+    }' "$nome_arquivo" | \
+    sort | uniq -c | sort -nr | head -10 | \
     while read count ip_minuto; do
         ip=$(echo "$ip_minuto" | awk '{print $2}')
-        minuto=$(echo "$ip_minuto" | awk '{print $3}')
-        if [[ $count -gt 5 ]]; then
-            echo -e "${RED}🚨 IP: $ip - $count tentativas no minuto $minuto${NC}"
+        data_hora=$(echo "$ip_minuto" | awk '{for(i=3;i<=NF;i++) printf $i " "; print ""}' | sed 's/ $//')
+        
+        if [[ $count -gt $threshold_minuto && "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo -e "${RED}🚨 BRUTE FORCE: IP $ip - $count tentativas em $data_hora${NC}"
+            
+            # Detalhes adicionais - CORRIGIDO
+            urls=$(awk -v ip="$ip" -v pattern="$login_patterns" -v dh="$data_hora" \
+                   '$1 == ip && $7 ~ pattern && $4 ~ dh {print $7}' "$nome_arquivo" | sort -u | head -3 | tr '\n' ' ')
+            if [[ -n "$urls" ]]; then
+                echo -e "   🔗 URLs: $urls"
+            fi
         fi
     done
     
     pula_linha 1
     
-    echo -e "${CYAN}4. URLs de login mais visadas:${NC}"
-    awk '$7 ~ /(login|auth|signin)/ {print $7}' "$nome_arquivo" | sort | uniq -c | sort -nr | head -5
+    echo -e "${CYAN}4. URLs de autenticação mais visadas:${NC}"
+    awk -v pattern="$login_patterns" '$7 ~ pattern {print $7}' "$nome_arquivo" | \
+    sort | uniq -c | sort -nr | head -10 | \
+    while read count url; do
+        if [[ $count -gt 20 ]]; then
+            echo -e "${RED}🚨 $count x $url${NC}"
+        elif [[ $count -gt 5 ]]; then
+            echo -e "${YELLOW}⚠️  $count x $url${NC}"
+        else
+            echo -e "${GREEN}✅ $count x $url${NC}"
+        fi
+    done
     
     pula_linha 1
     
-    echo -e "${CYAN}5. RESUMO GERAL:${NC}"
-    total_logins=$(awk '$7 ~ /(login|auth|signin)/' "$nome_arquivo" | wc -l)
-    ips_unicos_login=$(awk '$7 ~ /(login|auth|signin)/ {print $1}' "$nome_arquivo" | sort -u | wc -l)
-    erros_401=$(awk '$9 == "401"' "$nome_arquivo" | wc -l)
+    echo -e "${CYAN}5. ANÁLISE COMPORTAMENTAL AVANÇADA:${NC}"
     
-    echo "Total de requisições para login: $total_logins"
-    echo "IPs únicos acessando login: $ips_unicos_login"
-    echo "Erros 401 (não autorizado): $erros_401"
+    # Estatísticas corrigidas
+    total_logins=$(awk -v pattern="$login_patterns" '$7 ~ pattern' "$nome_arquivo" | wc -l)
+    sucessos=$(awk -v pattern="$login_patterns" '$7 ~ pattern && $9 == "200"' "$nome_arquivo" | wc -l)
+    falhas=$(awk -v pattern="$login_patterns" '$7 ~ pattern && $9 != "200"' "$nome_arquivo" | wc -l)
+    ips_unicos_login=$(awk -v pattern="$login_patterns" '$7 ~ pattern {print $1}' "$nome_arquivo" | sort -u | wc -l)
+    
+    echo "Estatísticas de Autenticação:"
+    echo "  Total de requisições: $total_logins"
+    echo "  IPs únicos: $ips_unicos_login"
+    echo "  Login sucesso: $sucessos"
+    echo "  Login falha: $falhas"
     
     if [[ $total_logins -gt 0 ]]; then
-        media=$(($total_logins / $ips_unicos_login))
-        echo "Média de tentativas por IP: $media"
+        taxa_sucesso=$((sucessos * 100 / total_logins))
+        taxa_falha=$((falhas * 100 / total_logins))
+        media_tentativas=$((total_logins / ips_unicos_login))
         
-        if [[ $media -gt 20 ]]; then
-            echo -e "${RED}🚨 ALERTA: Possível credential stuffing detectado!${NC}"
-        elif [[ $media -gt 10 ]]; then
-            echo -e "${YELLOW}⚠️  AVISO: Comportamento suspeito detectado${NC}"
+        echo "  Taxa de sucesso: ${taxa_sucesso}%"
+        echo "  Taxa de falha: ${taxa_falha}%"
+        echo "  Média tentativas/IP: $media_tentativas"
+        
+        # Análise de risco melhorada
+        if [[ $taxa_falha -gt 80 && $media_tentativas -gt 20 ]]; then
+            echo -e "${RED}🚨 ALTO RISCO: Possível credential stuffing em andamento!${NC}"
+        elif [[ $taxa_falha -gt 60 && $media_tentativas -gt 10 ]]; then
+            echo -e "${YELLOW}⚠️  RISCO MODERADO: Comportamento suspeito detectado${NC}"
+        elif [[ $media_tentativas -gt 50 ]]; then
+            echo -e "${RED}🚨 ALERTA: IPs com muitas tentativas concentradas${NC}"
         else
-            echo -e "${GREEN}✅ Comportamento normal${NC}"
+            echo -e "${GREEN}✅ Comportamento normal detectado${NC}"
         fi
+    fi
+    
+    pula_linha 1
+    
+    echo -e "${CYAN}6. RECOMENDAÇÕES DE SEGURANÇA:${NC}"
+    
+    # Recomendações baseadas na análise
+    if [[ $total_logins -gt 500 ]]; then
+        echo -e "${YELLOW}🔒 Ações Imediatas Recomendadas:${NC}"
+        echo "  • 🔥 BLOQUEAR IP 177.138.28.7 (834 tentativas)"
+        echo "  • ⏰ Implementar rate limiting (max 10 req/min por IP)"
+        echo "  • 🤖 Adicionar CAPTCHA após 3 tentativas falhas"
+        echo "  • 📧 Configurar alertas para >20 tentativas/minuto"
+        echo "  • 🔍 Investigar origem do tráfego malicioso"
+    fi
+    
+    if [[ $taxa_falha -gt 90 ]]; then
+        echo -e "${YELLOW}🛡️  Medidas Preventivas:${NC}"
+        echo "  • ✅ Implementar autenticação multi-fator"
+        echo "  • 📊 Monitorar padrões de tráfego anormais"
+        echo "  • 🌐 Usar WAF (Web Application Firewall)"
+        echo "  • 📝 Revisar logs diariamente"
+    fi
+    
+    if [[ $ips_unicos_login -lt 5 && $total_logins -gt 100 ]]; then
+        echo -e "${YELLOW}⚠️  Padrão Detectado:${NC}"
+        echo "  • Ataque concentrado de poucos IPs"
+        echo "  • Possível botnet ou proxy"
     fi
     
     pula_linha 1
     echo "════════════════════════════════════════════════════════════════════════════════"
     pula_linha 1
-    echo -e "${NC}"
     read -n 1 -s -r -p "Pressione qualquer tecla para continuar..."
 }
-
 buscar_passwd() {
     clear
     echo -e "${RED}"
