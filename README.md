@@ -1,9 +1,7 @@
 # 🛡️ Visão Apache - Analisador de Logs de Segurança
 
 <p align="center">
-
-  ![Banner](https://github.com/user-attachments/assets/b7724dac-b403-4332-b1ec-bb79cbfc6903)
-
+  <img src="https://github.com/user-attachments/assets/b7724dac-b403-4332-b1ec-bb79cbfc6903" alt="Banner" width="80%">
 </p>
 
 ## 📋 Sobre o Projeto
@@ -61,9 +59,7 @@ mv seu_arquivo_de_log.log ./
 ### Passo 3: Carregar o Arquivo
 
 <p align="center">
-
-![Menu](https://github.com/user-attachments/assets/92ada7ce-5bc2-42b2-aa66-18496ff8deb1)
-
+  <img src="https://github.com/user-attachments/assets/92ada7ce-5bc2-42b2-aa66-18496ff8deb1" alt="Menu" width="70%">
 </p>
 
 Dentro do programa:
