@@ -27,9 +27,9 @@ sudo yum install bash awk grep coreutils
 ### Instalação
 ```bash
 # 1. Clone ou baixe o script
-git clone <seu-repositorio>
+git clone https://github.com/Luanqmata/Visao_Apache
 # OU
-wget https://raw.githubusercontent.com/seu-usuario/visao-apache/main/visao_apache.sh
+wget https://raw.githubusercontent.com/Luanqmata/Visao_Apache/main/visao_apache.sh
 
 # 2. Torne executável
 chmod +x visao_apache.sh
