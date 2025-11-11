@@ -3,6 +3,7 @@
 <p align="center">
   <img src="https://github.com/user-attachments/assets/b7724dac-b403-4332-b1ec-bb79cbfc6903" alt="Banner" width="80%">
 </p>
+
 ## 📋 Sobre o Projeto
 O **Visão Apache** é uma ferramenta avançada de análise de logs de servidores web escrita em **Bash**, projetada para detectar padrões suspeitos, tentativas de invasão e ameaças de segurança em arquivos de log do Apache.
 
